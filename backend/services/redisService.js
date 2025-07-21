@@ -2,7 +2,7 @@ const Redis = require('ioredis');
 
 class RedisService {
   constructor() {
-    const redisUrl = process.env.REDIS_URL || 'rediss://default:ASowAAIjcDE3MDhjOGFiZTk5ZGM0ZWNhYmQ4NDY1ZDZiMmQ3OTQ4ZHAxMA@sweeping-pipefish-10800.upstash.io:6379';
+    const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
     
     const redisConfig = {
       family: 6,

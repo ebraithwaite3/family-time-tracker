@@ -2,6 +2,7 @@ const express = require('express');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
 const Redis = require('ioredis');
+const redisService = require('./services/redisService');
 
 const app = express();
 const server = createServer(app);
@@ -18,14 +19,11 @@ const io = new Server(server, {
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Redis subscriber for pub/sub (keep this one for WebSocket broadcasting)
-const redisSubscriber = new Redis('rediss://default:ASowAAIjcDE3MDhjOGFiZTk5ZGM0ZWNhYmQ4NDY1ZDZiMmQ3OTQ4ZHAxMA@sweeping-pipefish-10800.upstash.io:6379', {
-  family: 6,
-  tls: {}
-});
+// Redis subscriber for pub/sub (use environment variable!)
+const redisSubscriber = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
 
 // Subscribe to family updates
-const FAMILY_ID = 'braithwaite-family-tracker';
+const FAMILY_ID = 'braithwaite_family_tracker';
 redisSubscriber.subscribe(`${FAMILY_ID}_parents`);
 redisSubscriber.subscribe(`${FAMILY_ID}_jack`);
 redisSubscriber.subscribe(`${FAMILY_ID}_ellie`);
@@ -91,7 +89,7 @@ app.get('/health', (req, res) => {
 app.get('/api/family/:familyId', async (req, res) => {
   try {
     const { familyId } = req.params;
-    const { userType, userId } = req.query; // Get from query params
+    const { userType, userId } = req.query;
     
     const familyData = await redisService.getFamilyData(familyId, userType, userId);
     
@@ -103,37 +101,6 @@ app.get('/api/family/:familyId', async (req, res) => {
   } catch (error) {
     console.error('Error fetching family data:', error);
     res.status(500).json({ error: 'Failed to fetch family data' });
-  }
-});
-
-// Create/Update family data
-app.put('/api/family/:familyId', async (req, res) => {
-  try {
-    const { familyId } = req.params;
-    const familyData = req.body;
-    
-    // Add metadata
-    familyData.family_id = familyId;
-    familyData.last_updated = new Date().toISOString();
-    
-    // Save to Redis
-    await redisClient.set(familyId, JSON.stringify(familyData));
-    
-    // Notify all family members of update
-    await redisClient.publish(`${familyId}_parent`, JSON.stringify({
-      type: 'family_data_updated',
-      timestamp: new Date().toISOString()
-    }));
-    
-    await redisClient.publish(`${familyId}_kids`, JSON.stringify({
-      type: 'family_data_updated', 
-      timestamp: new Date().toISOString()
-    }));
-    
-    res.json({ success: true, familyId, updated: familyData.last_updated });
-  } catch (error) {
-    console.error('Error updating family data:', error);
-    res.status(500).json({ error: 'Failed to update family data' });
   }
 });
 
