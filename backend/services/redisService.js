@@ -6,8 +6,8 @@ class RedisService {
     const redisUrl = (process.env.REDIS_URL || 'redis://localhost:6379') + '?family=0';
     
     const redisConfig = {
-      // REMOVE 'family: 6' from here. The '?family=0' in the URL handles it.
-      tls: {}, // Keep this for potential TLS negotiation
+      // REMOVED 'family: 6' from here. The '?family=0' in the URL handles it.
+      // REMOVE 'tls: {}' as well, as it might be forcing TLS negotiation
       retryDelayOnFailover: 100,
       enableReadyCheck: false,
       maxRetriesPerRequest: 3,
