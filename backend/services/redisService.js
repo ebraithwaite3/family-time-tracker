@@ -2,11 +2,12 @@ const Redis = require('ioredis');
 
 class RedisService {
   constructor() {
-    const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+    // Append '?family=0' directly to the URL string
+    const redisUrl = (process.env.REDIS_URL || 'redis://localhost:6379') + '?family=0';
     
     const redisConfig = {
-      family: 6,
-      tls: {},
+      // REMOVE 'family: 6' from here. The '?family=0' in the URL handles it.
+      tls: {}, // Keep this for potential TLS negotiation
       retryDelayOnFailover: 100,
       enableReadyCheck: false,
       maxRetriesPerRequest: 3,

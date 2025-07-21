@@ -20,7 +20,10 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Redis subscriber for pub/sub (use environment variable!)
-const redisSubscriber = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+// Redis subscriber for pub/sub (use environment variable!)
+const redisSubscriber = new Redis(
+  (process.env.REDIS_URL || 'redis://localhost:6379') + '?family=0'
+);
 
 // Subscribe to family updates
 const FAMILY_ID = 'braithwaite_family_tracker';
