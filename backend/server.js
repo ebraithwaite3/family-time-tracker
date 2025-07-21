@@ -2,7 +2,6 @@ const express = require('express');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
 const Redis = require('ioredis');
-const redisService = require('./services/redisService'); // Assuming this is the path to your Redis service
 
 const app = express();
 const server = createServer(app);
@@ -26,7 +25,7 @@ const redisSubscriber = new Redis('rediss://default:ASowAAIjcDE3MDhjOGFiZTk5ZGM0
 });
 
 // Subscribe to family updates
-const FAMILY_ID = 'braithwaite_family_tracker';
+const FAMILY_ID = 'braithwaite-family-tracker';
 redisSubscriber.subscribe(`${FAMILY_ID}_parents`);
 redisSubscriber.subscribe(`${FAMILY_ID}_jack`);
 redisSubscriber.subscribe(`${FAMILY_ID}_ellie`);
