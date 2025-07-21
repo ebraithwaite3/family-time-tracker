@@ -2,16 +2,29 @@ const Redis = require('ioredis');
 
 class RedisService {
   constructor() {
-    // Regular Redis client for data operations
-    this.client = new Redis('rediss://default:ASowAAIjcDE3MDhjOGFiZTk5ZGM0ZWNhYmQ4NDY1ZDZiMmQ3OTQ4ZHAxMA@sweeping-pipefish-10800.upstash.io:6379', {
+    const redisUrl = process.env.REDIS_URL || 'rediss://default:ASowAAIjcDE3MDhjOGFiZTk5ZGM0ZWNhYmQ4NDY1ZDZiMmQ3OTQ4ZHAxMA@sweeping-pipefish-10800.upstash.io:6379';
+    
+    const redisConfig = {
       family: 6,
-      tls: {}
+      tls: {},
+      retryDelayOnFailover: 100,
+      enableReadyCheck: false,
+      maxRetriesPerRequest: 3,
+    };
+
+    // Regular Redis client for data operations
+    this.client = new Redis(redisUrl, redisConfig);
+
+    // Publisher client for pub/sub notifications  
+    this.publisher = new Redis(redisUrl, redisConfig);
+
+    // Add error handling
+    this.client.on('error', (err) => {
+      console.error('Redis client error:', err);
     });
 
-    // Publisher client for pub/sub notifications
-    this.publisher = new Redis('rediss://default:ASowAAIjcDE3MDhjOGFiZTk5ZGM0ZWNhYmQ4NDY1ZDZiMmQ3OTQ4ZHAxMA@sweeping-pipefish-10800.upstash.io:6379', {
-      family: 6,
-      tls: {}
+    this.publisher.on('error', (err) => {
+      console.error('Redis publisher error:', err);
     });
   }
 
