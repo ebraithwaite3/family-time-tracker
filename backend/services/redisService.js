@@ -2,12 +2,9 @@ const Redis = require('ioredis');
 
 class RedisService {
   constructor() {
-    // Append '?family=0' directly to the URL string
     const redisUrl = (process.env.REDIS_URL || 'redis://localhost:6379') + '?family=0';
     
     const redisConfig = {
-      // REMOVED 'family: 6' from here. The '?family=0' in the URL handles it.
-      // REMOVE 'tls: {}' as well, as it might be forcing TLS negotiation
       retryDelayOnFailover: 100,
       enableReadyCheck: false,
       maxRetriesPerRequest: 3,
@@ -29,7 +26,7 @@ class RedisService {
     });
   }
 
-  // Get family data with permission filtering
+  // Get family data with permission filtering and proper camelCase structure
   async getFamilyData(familyId, userType, userId = null) {
     try {
       const rawData = await this.client.get(familyId);
@@ -38,22 +35,57 @@ class RedisService {
       const familyData = JSON.parse(rawData);
 
       if (userType === 'parent') {
-        // Parents see everything
-        return familyData;
-      } else if (userType === 'kid' && userId) {
-        // Kids only see their own data + general settings
+        // Parents see everything - return structured data
+        const kidsData = {};
+        
+        // Build kids data with their settings merged in
+        Object.keys(familyData.kids).forEach(kidId => {
+          const kid = familyData.kids[kidId];
+          const kidSettings = familyData.settings.kidsSettings[kidId] || {};
+          
+          kidsData[kidId] = {
+            id: kid.id,
+            name: kid.name,
+            devices: kid.devices,
+            sessions: kid.sessions || [],
+            settings: kidSettings
+          };
+        });
+
         return {
-          family_id: familyData.family_id,
-          settings: familyData.settings,
-          my_data: {
+          familyId: familyData.familyId,
+          myData: {
             id: userId,
-            name: familyData.kids[userId]?.name,
-            devices: familyData.kids[userId]?.devices,
-            limits: familyData.kids[userId]?.limits,
-            app_rules: familyData.kids[userId]?.app_rules,
-            sessions: familyData.kids[userId]?.sessions || []
+            name: familyData.parents[userId]?.name,
+            devices: familyData.parents[userId]?.devices || []
           },
-          last_updated: familyData.last_updated
+          kidsData,
+          settings: familyData.settings,
+          lastUpdated: familyData.lastUpdated
+        };
+        
+      } else if (userType === 'kid' && userId) {
+        // Kids only see their own data with settings merged
+        const kid = familyData.kids[userId];
+        const kidSettings = familyData.settings.kidsSettings[userId] || {};
+        
+        if (!kid) return null;
+
+        return {
+          familyId: familyData.familyId,
+          myData: {
+            id: kid.id,
+            name: kid.name,
+            devices: kid.devices,
+            sessions: kid.sessions || [],
+            settings: kidSettings
+          },
+          globalSettings: {
+            notificationsEnabled: familyData.settings.notificationsEnabled,
+            warningThresholds: familyData.settings.warningThresholds,
+            autoEndSessions: familyData.settings.autoEndSessions
+          },
+          lastUpdated: familyData.lastUpdated
         };
       }
 
@@ -77,9 +109,10 @@ class RedisService {
       // Build session object with only non-null/non-undefined values
       const newSession = {
         id: sessionData.id || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        date: sessionData.date || new Date().toISOString().split('T')[0],
         duration: sessionData.duration,
         countTowardsTotal: sessionData.countTowardsTotal,
-        created_at: new Date().toISOString()
+        createdAt: new Date().toISOString()
       };
 
       // Add optional fields only if they have values
@@ -96,9 +129,9 @@ class RedisService {
       await this._saveFamilyData(familyId, familyData);
 
       // Determine notification type
-      let notificationType = 'session_added';
-      if (sessionData.bonus) notificationType = 'bonus_added';
-      if (sessionData.punishment) notificationType = 'punishment_added';
+      let notificationType = 'sessionAdded';
+      if (sessionData.bonus) notificationType = 'bonusAdded';
+      if (sessionData.punishment) notificationType = 'punishmentAdded';
 
       // Notify parents
       await this._notifyParents(familyId, {
@@ -132,7 +165,7 @@ class RedisService {
       sessions[sessionIndex] = {
         ...sessions[sessionIndex],
         ...updates,
-        updated_at: new Date().toISOString()
+        updatedAt: new Date().toISOString()
       };
 
       // Recalculate duration if start/end times provided
@@ -146,9 +179,9 @@ class RedisService {
       await this._saveFamilyData(familyId, familyData);
 
       // Determine notification type
-      let notificationType = 'session_updated';
+      let notificationType = 'sessionUpdated';
       if (updates.timeEnded && !oldSession.timeEnded) {
-        notificationType = 'session_ended';
+        notificationType = 'sessionEnded';
       }
 
       // Notify parents
@@ -172,7 +205,7 @@ class RedisService {
     try {
       const familyData = await this._getFamilyDataRaw(familyId);
       
-      // Support nested path updates like "kids.jack.limits.daily_total"
+      // Support nested path updates like "settings.kidsSettings.Jack.dailyTotal"
       const pathParts = settingPath.split('.');
       let target = familyData;
       
@@ -188,21 +221,26 @@ class RedisService {
 
       await this._saveFamilyData(familyId, familyData);
 
-      // Determine who to notify
-      if (settingPath.startsWith('kids.')) {
-        const kidId = pathParts[1];
-        await this._notifyKid(familyId, kidId, {
-          type: 'setting_updated',
-          path: settingPath,
-          oldValue,
-          newValue,
-          updatedBy
-        });
+      // Determine who to notify based on setting path
+      if (settingPath.includes('kidsSettings')) {
+        // Extract kid ID from path like "settings.kidsSettings.Jack.dailyTotal"
+        const pathParts = settingPath.split('.');
+        const kidIdIndex = pathParts.indexOf('kidsSettings') + 1;
+        if (kidIdIndex < pathParts.length) {
+          const kidId = pathParts[kidIdIndex];
+          await this._notifyKid(familyId, kidId, {
+            type: 'settingUpdated',
+            path: settingPath,
+            oldValue,
+            newValue,
+            updatedBy
+          });
+        }
       }
 
-      // Always notify parent
-      await this._notifyParent(familyId, {
-        type: 'setting_updated',
+      // Always notify parents
+      await this._notifyParents(familyId, {
+        type: 'settingUpdated',
         path: settingPath,
         oldValue,
         newValue,
@@ -233,15 +271,15 @@ class RedisService {
       sessions[sessionIndex] = {
         ...sessions[sessionIndex],
         ...updates,
-        updated_at: new Date().toISOString(),
-        updated_by: updatedBy
+        updatedAt: new Date().toISOString(),
+        updatedBy: updatedBy
       };
 
       await this._saveFamilyData(familyId, familyData);
 
       // Notify relevant parties
-      await this._notifyParent(familyId, {
-        type: 'session_edited',
+      await this._notifyParents(familyId, {
+        type: 'sessionEdited',
         kidId,
         kidName: familyData.kids[kidId].name,
         oldSession,
@@ -251,7 +289,7 @@ class RedisService {
 
       if (updatedBy !== kidId) {
         await this._notifyKid(familyId, kidId, {
-          type: 'session_edited',
+          type: 'sessionEdited',
           session: sessions[sessionIndex],
           updatedBy
         });
@@ -285,7 +323,7 @@ class RedisService {
   }
 
   async _saveFamilyData(familyId, familyData) {
-    familyData.last_updated = new Date().toISOString();
+    familyData.lastUpdated = new Date().toISOString();
     await this.client.set(familyId, JSON.stringify(familyData));
   }
 

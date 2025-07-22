@@ -168,8 +168,8 @@ app.post('/api/family/:familyId/kids/:kidId/quick-add', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`🚀 Family Time Tracker server running on http://localhost:${PORT}`);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Family Time Tracker server running on http://0.0.0.0:${PORT}`);
   console.log(`👨‍👩‍👧‍👦 Family: ${FAMILY_ID}`);
   console.log(`📱 Ready for family connections`);
 });
