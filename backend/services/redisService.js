@@ -321,13 +321,33 @@ class RedisService {
       console.log(`🔄 Redis: Updating settings for kid ${kidId}`);
       
       const familyData = await this._getFamilyDataRaw(familyId);
+      console.log('🔍 Redis: Family data keys:', Object.keys(familyData));
+      console.log('🔍 Redis: Has kids?', !!familyData.kids);
+      console.log('🔍 Redis: Has settings?', !!familyData.settings);
+      console.log('🔍 Redis: Has kidsSettings?', !!familyData.settings?.kidsSettings);
       
-      if (!familyData.kidsData[kidId]) {
-        throw new Error(`Kid ${kidId} not found`);
+      // Check both possible locations for kids data
+      if (!familyData.kids?.[kidId] && !familyData.kidsData?.[kidId]) {
+        console.log('❌ Redis: Kid not found in kids or kidsData');
+        throw new Error(`Kid ${kidId} not found in either kids or kidsData`);
       }
       
-      // Update the kid's settings
-      familyData.kidsData[kidId].settings = newSettings;
+      // Ensure settings structure exists
+      if (!familyData.settings) {
+        console.log('🔧 Redis: Creating settings object');
+        familyData.settings = {};
+      }
+      if (!familyData.settings.kidsSettings) {
+        console.log('🔧 Redis: Creating kidsSettings object');
+        familyData.settings.kidsSettings = {};
+      }
+      
+      console.log('🔍 Redis: Current kidsSettings keys:', Object.keys(familyData.settings.kidsSettings));
+      
+      // Update settings in the kidsSettings section
+      familyData.settings.kidsSettings[kidId] = newSettings;
+      
+      console.log('🔍 Redis: Updated kidsSettings keys:', Object.keys(familyData.settings.kidsSettings));
       
       await this._saveFamilyData(familyId, familyData);
       
@@ -337,19 +357,14 @@ class RedisService {
       await this._notifyParents(familyId, {
         type: 'settingsUpdated',
         kidId,
-        kidName: familyData.kidsData[kidId].name,
-        settings: newSettings
-      });
-      
-      // Notify the kid too
-      await this._notifyKid(familyId, kidId, {
-        type: 'mySettingsUpdated',
+        kidName: familyData.kids?.[kidId]?.name || kidId,
         settings: newSettings
       });
       
       return { success: true, kidId, settings: newSettings };
     } catch (error) {
       console.error('❌ Redis: Error updating kid settings:', error);
+      console.error('❌ Redis: Error stack:', error.stack);
       throw error;
     }
   }
