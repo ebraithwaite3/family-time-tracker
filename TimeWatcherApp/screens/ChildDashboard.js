@@ -1,17 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import { useData } from '../context/DataContext';
 import Header from '../components/Header';
 import { DateTime } from 'luxon';
 
+// Import tab components
+import ChildHomeTab from '../tabs/ChildHomeTab';
+import EditTab from '../tabs/EditTab';
+import HistoryTab from '../tabs/HistoryTab';
+import ChildSettingsTab from '../tabs/ChildSettingsTab';
+
 const ChildDashboard = ({ userName, onLogout }) => {
   const { theme } = useTheme();
-  const { 
-    familyData, 
-    isLoadingData, 
-    dataError, 
-    refreshFamilyData, 
+  const {
+    familyData,
+    isLoadingData,
+    dataError,
+    refreshFamilyData,
     todaysDate,
     getCurrentUserSettings,
     getTodaysSessions,
@@ -22,7 +28,9 @@ const ChildDashboard = ({ userName, onLogout }) => {
     isInBedtime
   } = useData();
 
-  // Get all the data using helper functions
+  const [activeTab, setActiveTab] = useState('home');
+
+  // Get all the data using helper functions (these will be passed to ChildHomeTab)
   const mySettings = getCurrentUserSettings();
   const todaysSessions = getTodaysSessions();
   const usedTime = calculateUsedTime();
@@ -35,7 +43,7 @@ const ChildDashboard = ({ userName, onLogout }) => {
   const isWeekend = todaysDate.weekday >= 6;
   const scheduleType = isWeekend ? 'weekend' : 'weekday';
 
-  // Log everything for debugging
+  // Log everything for debugging (kept here as this component processes the data)
   useEffect(() => {
     console.log('=== CHILD DASHBOARD DATA ===');
     console.log('📅 Date:', todaysDate.toFormat('yyyy-MM-dd'));
@@ -44,7 +52,7 @@ const ChildDashboard = ({ userName, onLogout }) => {
     console.log('🔄 Loading:', isLoadingData);
     console.log('❌ Error:', dataError);
     console.log('📊 Family Data Structure:', familyData ? Object.keys(familyData) : 'null');
-    
+
     if (familyData) {
       console.log('👤 My Data Keys:', familyData.myData ? Object.keys(familyData.myData) : 'null');
       console.log('👤 My Full Data:', familyData.myData);
@@ -81,121 +89,103 @@ const ChildDashboard = ({ userName, onLogout }) => {
       });
     }
 
-  }, [familyData, isLoadingData, dataError, mySettings, todaysSessions, usedTime, currentLimits, remainingTime, usagePercentage, inBedtime, scheduleType]);
+  }, [familyData, isLoadingData, dataError, mySettings, todaysSessions, usedTime, currentLimits, remainingTime, usagePercentage, inBedtime, scheduleType, todaysDate, userName]);
+
+  const tabs = [
+    { id: 'home', label: 'Home', icon: '🏠' },
+    { id: 'edit', label: 'Edit', icon: '✏️' },
+    { id: 'history', label: 'History', icon: '📊' },
+    { id: 'settings', label: 'Settings', icon: '⚙️' },
+  ];
+
+  const renderTabButton = (tab) => {
+    const isActive = activeTab === tab.id;
+    return (
+      <TouchableOpacity
+        key={tab.id}
+        style={[
+          styles.tabButton,
+          {
+            backgroundColor: isActive ? theme.buttonBackground : 'transparent',
+          }
+        ]}
+        onPress={() => setActiveTab(tab.id)}
+      >
+        <Text style={[
+          styles.tabIcon,
+          { color: isActive ? theme.buttonText : theme.text }
+        ]}>
+          {tab.icon}
+        </Text>
+        <Text style={[
+          styles.tabLabel,
+          {
+            color: isActive ? theme.buttonText : theme.text,
+            fontWeight: isActive ? '600' : '400'
+          }
+        ]}>
+          {tab.label}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderActiveTab = () => {
+    // Props common to most tabs
+    const commonProps = {
+      userName,
+      onLogout,
+    };
+
+    switch (activeTab) {
+      case 'home':
+        return (
+          <ChildHomeTab
+            {...commonProps}
+            todaysDate={todaysDate}
+            scheduleType={scheduleType}
+            isLoadingData={isLoadingData}
+            dataError={dataError}
+            familyData={familyData}
+            mySettings={mySettings}
+            todaysSessions={todaysSessions}
+            usedTime={usedTime}
+            currentLimits={currentLimits}
+            remainingTime={remainingTime}
+            usagePercentage={usagePercentage}
+            inBedtime={inBedtime}
+          />
+        );
+      case 'edit':
+        return <EditTab {...commonProps} />;
+      case 'history':
+        return <HistoryTab {...commonProps} />;
+      case 'settings':
+        return <ChildSettingsTab {...commonProps} />;
+      default:
+        return <ChildHomeTab {...commonProps} />;
+    }
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: theme.headerBackground }]}>
       <Header userName={userName} onNameCleared={onLogout} />
-      <ScrollView style={[styles.scrollContainer, { backgroundColor: theme.background }]}>
-        <View style={styles.contentContainer}>
-          <Text style={[styles.text, { color: theme.text }]}>
-            Child Dashboard for {userName}!
-          </Text>
-          
-          {/* Display loading/error states */}
-          {isLoadingData && (
-            <Text style={[styles.statusText, { color: theme.text }]}>
-              Loading family data...
-            </Text>
-          )}
-          
-          {dataError && (
-            <Text style={[styles.errorText, { color: 'red' }]}>
-              Error: {dataError.message}
-            </Text>
-          )}
-          
-          {familyData && (
-            <View style={styles.dataContainer}>
-              {/* Basic Info */}
-              <Text style={[styles.sectionTitle, { color: theme.text }]}>
-                📅 {scheduleType.toUpperCase()} SCHEDULE
-              </Text>
-              
-              {/* Time Info */}
-              <Text style={[styles.dataText, { color: theme.text }]}>
-                Daily Limit: {currentLimits?.dailyTotal || 'N/A'} minutes
-              </Text>
-              <Text style={[styles.dataText, { color: theme.text }]}>
-                Used Time: {usedTime} minutes
-              </Text>
-              <Text style={[styles.dataText, { color: theme.text }]}>
-                Remaining: {remainingTime} minutes
-              </Text>
-              <Text style={[styles.dataText, { color: theme.text }]}>
-                Usage: {Math.round(usagePercentage)}%
-              </Text>
-              
-              {/* Session Info */}
-              <Text style={[styles.sectionTitle, { color: theme.text }]}>
-                📱 TODAY'S SESSIONS
-              </Text>
-              <Text style={[styles.dataText, { color: theme.text }]}>
-                Total Sessions: {todaysSessions.length}
-              </Text>
-              <Text style={[styles.dataText, { color: theme.text }]}>
-                Counting Sessions: {todaysSessions.filter(s => s.countTowardsTotal).length}
-              </Text>
-              
-              {/* Bedtime Info */}
-              <Text style={[styles.sectionTitle, { color: theme.text }]}>
-                🌙 BEDTIME STATUS
-              </Text>
-              <Text style={[styles.dataText, { color: inBedtime ? 'red' : 'green' }]}>
-                Status: {inBedtime ? 'IN BEDTIME' : 'ACTIVE HOURS'}
-              </Text>
-              {mySettings?.bedtimeRestrictions && (
-                <>
-                  <Text style={[styles.dataText, { color: theme.text }]}>
-                    Bedtime: {mySettings.bedtimeRestrictions[scheduleType]?.bedtime || 'N/A'}
-                  </Text>
-                  <Text style={[styles.dataText, { color: theme.text }]}>
-                    Wake Time: {mySettings.bedtimeRestrictions[scheduleType]?.wakeTime || 'N/A'}
-                  </Text>
-                </>
-              )}
-              
-              {/* Bonus Activities */}
-              <Text style={[styles.sectionTitle, { color: theme.text }]}>
-                💰 BONUS ACTIVITIES
-              </Text>
-              {mySettings?.bonusActivities && Object.entries(mySettings.bonusActivities).map(([activity, rules]) => (
-                <Text key={activity} style={[styles.dataText, { color: theme.text }]}>
-                  {activity}: {rules.enabled ? `${rules.ratio}:1 (max ${rules.dailyMax}min)` : 'Disabled'}
-                </Text>
-              ))}
-              
-              {/* Device Limits */}
-              {currentLimits?.perDevice && (
-                <>
-                  <Text style={[styles.sectionTitle, { color: theme.text }]}>
-                    📱 DEVICE LIMITS
-                  </Text>
-                  {Object.entries(currentLimits.perDevice).map(([device, limit]) => (
-                    <Text key={device} style={[styles.dataText, { color: theme.text }]}>
-                      {device}: {limit} minutes
-                    </Text>
-                  ))}
-                </>
-              )}
-              
-              {/* App Limits */}
-              {currentLimits?.perApp && (
-                <>
-                  <Text style={[styles.sectionTitle, { color: theme.text }]}>
-                    🎮 APP LIMITS
-                  </Text>
-                  {Object.entries(currentLimits.perApp).map(([app, limit]) => (
-                    <Text key={app} style={[styles.dataText, { color: theme.text }]}>
-                      {app}: {limit} minutes
-                    </Text>
-                  ))}
-                </>
-              )}
-            </View>
-          )}
-        </View>
-      </ScrollView>
+
+      {/* Tab Content */}
+      <View style={[styles.content, { backgroundColor: theme.background }]}>
+        {renderActiveTab()}
+      </View>
+
+      {/* Bottom Tab Bar */}
+      <View style={[
+        styles.tabBar,
+        {
+          backgroundColor: theme.headerBackground,
+          borderTopColor: theme.isDark ? '#444' : '#ddd'
+        }
+      ]}>
+        {tabs.map(renderTabButton)}
+      </View>
     </View>
   );
 };
@@ -204,46 +194,29 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  scrollContainer: {
+  content: {
     flex: 1,
   },
-  contentContainer: {
-    justifyContent: 'flex-start',
+  tabBar: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    paddingBottom: 20, // Extra padding for safe area
+    paddingTop: 8,
+  },
+  tabButton: {
+    flex: 1,
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 50,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    borderRadius: 8,
+    marginHorizontal: 4,
   },
-  text: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 20,
+  tabIcon: {
+    fontSize: 20,
+    marginBottom: 4,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginTop: 15,
-    marginBottom: 10,
-  },
-  statusText: {
-    fontSize: 16,
-    textAlign: 'center',
-    marginBottom: 10,
-  },
-  errorText: {
-    fontSize: 16,
-    textAlign: 'center',
-    marginBottom: 10,
-  },
-  dataContainer: {
-    alignItems: 'center',
-    width: '100%',
-  },
-  dataText: {
-    fontSize: 14,
-    marginBottom: 5,
+  tabLabel: {
+    fontSize: 12,
     textAlign: 'center',
   },
 });

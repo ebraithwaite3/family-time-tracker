@@ -77,7 +77,7 @@ const ParentDashboard = ({ userName, onLogout }) => {
       case 'home':
         return <ParentHomeTab {...tabProps} />;
       case 'edit':
-        return <EditTab {...tabProps} />;
+        return <EditTab userName={userName} selectedKid={selectedKid} onKidChange={setSelectedKid} userType="parent" />;
       case 'history':
         return <HistoryTab {...tabProps} />;
       case 'settings':

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import { useData } from '../context/DataContext';
 import CustomDropdown from '../components/CustomDropdown';
+import TodaysSessionsSummary from '../components/TodaysSessionsSummary';
 import { DateTime } from 'luxon';
 
 const ParentHomeTab = ({ userName, selectedKid, onKidChange }) => {
@@ -32,6 +33,16 @@ const ParentHomeTab = ({ userName, selectedKid, onKidChange }) => {
   // Determine if it's weekend
   const isWeekend = todaysDate.weekday >= 6;
   const scheduleType = isWeekend ? 'weekend' : 'weekday';
+
+  // Helper function to convert 24hr to 12hr format
+  const formatTime12Hour = (time24) => {
+    if (!time24) return '';
+    const [hours, minutes] = time24.split(':');
+    const hour = parseInt(hours);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const hour12 = hour % 12 || 12;
+    return `${hour12}:${minutes} ${ampm}`;
+  };
 
   // Log data for debugging
   useEffect(() => {
@@ -140,7 +151,7 @@ const ParentHomeTab = ({ userName, selectedKid, onKidChange }) => {
                   </Text>
                 </View>
 
-                {/* Bedtime Status Card */}
+                {/* FIXED: Bedtime Status Card */}
                 <View style={[styles.statusCard, { backgroundColor: theme.menuBackground }]}>
                   <Text style={[styles.cardTitle, { color: theme.text }]}>
                     🌙 Bedtime Status
@@ -149,44 +160,21 @@ const ParentHomeTab = ({ userName, selectedKid, onKidChange }) => {
                     styles.statusText, 
                     { color: selectedKidInBedtime ? '#ff4444' : '#44aa44' }
                   ]}>
-                    {selectedKidInBedtime ? 'IN BEDTIME' : 'ACTIVE HOURS'}
+                    {selectedKidInBedtime ? 'BEDTIME' : 'ACTIVE HOURS'}
                   </Text>
                   {selectedKidData.settings?.bedtimeRestrictions && (
                     <Text style={[styles.bedtimeInfo, { color: theme.text }]}>
-                      {selectedKidData.settings.bedtimeRestrictions[scheduleType]?.bedtime} - {selectedKidData.settings.bedtimeRestrictions[scheduleType]?.wakeTime}
+                      {/* FIXED: Active hours (wake to bedtime) in 12hr format */}
+                      {formatTime12Hour(selectedKidData.settings.bedtimeRestrictions[scheduleType]?.wakeTime)} - {formatTime12Hour(selectedKidData.settings.bedtimeRestrictions[scheduleType]?.bedtime)}
                     </Text>
                   )}
                 </View>
 
-                {/* Today's Sessions */}
-                <View style={[styles.sessionsCard, { backgroundColor: theme.menuBackground }]}>
-                  <Text style={[styles.cardTitle, { color: theme.text }]}>
-                    📱 Today's Sessions ({selectedKidSessions.length})
-                  </Text>
-                  
-                  {selectedKidSessions.length === 0 ? (
-                    <Text style={[styles.noSessionsText, { color: theme.text }]}>
-                      No sessions today
-                    </Text>
-                  ) : (
-                    selectedKidSessions.slice(0, 3).map((session, index) => (
-                      <View key={session.id} style={styles.sessionItem}>
-                        <Text style={[styles.sessionText, { color: theme.text }]}>
-                          {session.duration}min on {session.device || 'Unknown'}
-                        </Text>
-                        <Text style={[styles.sessionMeta, { color: theme.text, opacity: 0.7 }]}>
-                          {session.countTowardsTotal ? '• Counts toward limit' : '• Bonus time'}
-                        </Text>
-                      </View>
-                    ))
-                  )}
-                  
-                  {selectedKidSessions.length > 3 && (
-                    <Text style={[styles.moreSessionsText, { color: theme.text, opacity: 0.7 }]}>
-                      +{selectedKidSessions.length - 3} more sessions
-                    </Text>
-                  )}
-                </View>
+                {/* UPDATED: Today's Sessions with better spacing */}
+                <TodaysSessionsSummary 
+                  userType="parent"
+                  userId={selectedKid}
+                />
 
                 {/* All Kids Quick Overview */}
                 <View style={[styles.overviewCard, { backgroundColor: theme.menuBackground }]}>
@@ -320,37 +308,6 @@ const styles = StyleSheet.create({
   },
   bedtimeInfo: {
     fontSize: 14,
-  },
-  sessionsCard: {
-    borderRadius: 12,
-    padding: 20,
-    marginBottom: 16,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  noSessionsText: {
-    textAlign: 'center',
-    fontStyle: 'italic',
-    opacity: 0.7,
-  },
-  sessionItem: {
-    marginBottom: 12,
-  },
-  sessionText: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  sessionMeta: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  moreSessionsText: {
-    textAlign: 'center',
-    fontSize: 12,
-    marginTop: 8,
   },
   overviewCard: {
     borderRadius: 12,
