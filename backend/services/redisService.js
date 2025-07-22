@@ -39,9 +39,9 @@ class RedisService {
         const kidsData = {};
         
         // Build kids data with their settings merged in
-        Object.keys(familyData.kids).forEach(kidId => {
-          const kid = familyData.kids[kidId];
-          const kidSettings = familyData.settings.kidsSettings[kidId] || {};
+        Object.keys(familyData.kidsData || {}).forEach(kidId => {
+          const kid = familyData.kidsData[kidId];
+          const kidSettings = familyData.settings?.kidsSettings?.[kidId] || {};
           
           kidsData[kidId] = {
             id: kid.id,
@@ -56,8 +56,8 @@ class RedisService {
           familyId: familyData.familyId,
           myData: {
             id: userId,
-            name: familyData.parents[userId]?.name,
-            devices: familyData.parents[userId]?.devices || []
+            name: familyData.parents?.[userId]?.name,
+            devices: familyData.parents?.[userId]?.devices || []
           },
           kidsData,
           settings: familyData.settings,
@@ -66,8 +66,8 @@ class RedisService {
         
       } else if (userType === 'kid' && userId) {
         // Kids only see their own data with settings merged
-        const kid = familyData.kids[userId];
-        const kidSettings = familyData.settings.kidsSettings[userId] || {};
+        const kid = familyData.kidsData?.[userId];
+        const kidSettings = familyData.settings?.kidsSettings?.[userId] || {};
         
         if (!kid) return null;
 
@@ -81,9 +81,9 @@ class RedisService {
             settings: kidSettings
           },
           globalSettings: {
-            notificationsEnabled: familyData.settings.notificationsEnabled,
-            warningThresholds: familyData.settings.warningThresholds,
-            autoEndSessions: familyData.settings.autoEndSessions
+            notificationsEnabled: familyData.settings?.notificationsEnabled,
+            warningThresholds: familyData.settings?.warningThresholds,
+            autoEndSessions: familyData.settings?.autoEndSessions
           },
           lastUpdated: familyData.lastUpdated
         };
@@ -102,8 +102,8 @@ class RedisService {
       const familyData = await this._getFamilyDataRaw(familyId);
       
       // Initialize sessions array if needed
-      if (!familyData.kids[kidId].sessions) {
-        familyData.kids[kidId].sessions = [];
+      if (!familyData.kidsData[kidId].sessions) {
+        familyData.kidsData[kidId].sessions = [];
       }
 
       // Build session object with only non-null/non-undefined values
@@ -125,7 +125,7 @@ class RedisService {
       if (sessionData.bonus) newSession.bonus = true;
       if (sessionData.punishment) newSession.punishment = true;
 
-      familyData.kids[kidId].sessions.push(newSession);
+      familyData.kidsData[kidId].sessions.push(newSession);
       await this._saveFamilyData(familyId, familyData);
 
       // Determine notification type
@@ -137,7 +137,7 @@ class RedisService {
       await this._notifyParents(familyId, {
         type: notificationType,
         kidId,
-        kidName: familyData.kids[kidId].name,
+        kidName: familyData.kidsData[kidId].name,
         session: newSession
       });
 
@@ -152,7 +152,7 @@ class RedisService {
   async updateSession(familyId, kidId, sessionId, updates) {
     try {
       const familyData = await this._getFamilyDataRaw(familyId);
-      const sessions = familyData.kids[kidId].sessions;
+      const sessions = familyData.kidsData[kidId].sessions;
       const sessionIndex = sessions.findIndex(s => s.id === sessionId);
 
       if (sessionIndex === -1) {
@@ -188,7 +188,7 @@ class RedisService {
       await this._notifyParents(familyId, {
         type: notificationType,
         kidId,
-        kidName: familyData.kids[kidId].name,
+        kidName: familyData.kidsData[kidId].name,
         oldSession,
         session: sessions[sessionIndex]
       });
@@ -200,7 +200,7 @@ class RedisService {
     }
   }
 
-  // Update family/kid settings
+  // Update family/kid settings (OLD - for backwards compatibility)
   async updateSetting(familyId, settingPath, newValue, updatedBy) {
     try {
       const familyData = await this._getFamilyDataRaw(familyId);
@@ -258,7 +258,7 @@ class RedisService {
   async editSession(familyId, kidId, sessionId, updates, updatedBy) {
     try {
       const familyData = await this._getFamilyDataRaw(familyId);
-      const sessions = familyData.kids[kidId].sessions;
+      const sessions = familyData.kidsData[kidId].sessions;
       const sessionIndex = sessions.findIndex(s => s.id === sessionId);
 
       if (sessionIndex === -1) {
@@ -281,7 +281,7 @@ class RedisService {
       await this._notifyParents(familyId, {
         type: 'sessionEdited',
         kidId,
-        kidName: familyData.kids[kidId].name,
+        kidName: familyData.kidsData[kidId].name,
         oldSession,
         newSession: sessions[sessionIndex],
         updatedBy
@@ -313,6 +313,212 @@ class RedisService {
     }
   }
 
+  // NEW: Update kid settings
+  async updateKidSettings(familyId, kidId, newSettings) {
+    try {
+      console.log(`🔄 Redis: Updating settings for kid ${kidId}`);
+      
+      const familyData = await this._getFamilyDataRaw(familyId);
+      
+      if (!familyData.kidsData[kidId]) {
+        throw new Error(`Kid ${kidId} not found`);
+      }
+      
+      // Update the kid's settings
+      familyData.kidsData[kidId].settings = newSettings;
+      
+      await this._saveFamilyData(familyId, familyData);
+      
+      console.log(`✅ Redis: Settings updated for kid ${kidId}`);
+      
+      // Notify relevant parties
+      await this._notifyParents(familyId, {
+        type: 'settingsUpdated',
+        kidId,
+        kidName: familyData.kidsData[kidId].name,
+        settings: newSettings
+      });
+      
+      // Notify the kid too
+      await this._notifyKid(familyId, kidId, {
+        type: 'mySettingsUpdated',
+        settings: newSettings
+      });
+      
+      return { success: true, kidId, settings: newSettings };
+    } catch (error) {
+      console.error('❌ Redis: Error updating kid settings:', error);
+      throw error;
+    }
+  }
+
+  // NEW: Get kid settings
+  async getKidSettings(familyId, kidId) {
+    try {
+      const familyData = await this._getFamilyDataRaw(familyId);
+      
+      if (!familyData.kidsData[kidId]) {
+        throw new Error(`Kid ${kidId} not found`);
+      }
+      
+      return familyData.kidsData[kidId].settings || {};
+    } catch (error) {
+      console.error('Error getting kid settings:', error);
+      throw error;
+    }
+  }
+
+  // NEW: Apply master settings to all kids
+  async applyMasterSettings(familyId, masterSettings) {
+    try {
+      console.log('🔄 Redis: Applying master settings to all kids');
+      
+      const familyData = await this._getFamilyDataRaw(familyId);
+      
+      const updatedKids = [];
+      
+      // Apply settings to each kid
+      Object.keys(familyData.kidsData).forEach(kidId => {
+        familyData.kidsData[kidId].settings = JSON.parse(JSON.stringify(masterSettings));
+        updatedKids.push({
+          kidId,
+          name: familyData.kidsData[kidId].name
+        });
+      });
+      
+      await this._saveFamilyData(familyId, familyData);
+      
+      console.log(`✅ Redis: Master settings applied to ${updatedKids.length} kids`);
+      
+      // Notify parents
+      await this._notifyParents(familyId, {
+        type: 'masterSettingsApplied',
+        settings: masterSettings,
+        affectedKids: updatedKids
+      });
+      
+      // Notify each kid
+      for (const kid of updatedKids) {
+        await this._notifyKid(familyId, kid.kidId, {
+          type: 'mySettingsUpdated',
+          settings: masterSettings,
+          source: 'master'
+        });
+      }
+      
+      return { 
+        success: true, 
+        affectedKids: updatedKids,
+        settings: masterSettings 
+      };
+    } catch (error) {
+      console.error('❌ Redis: Error applying master settings:', error);
+      throw error;
+    }
+  }
+
+  // NEW: Update complete family data
+  async updateFamilyData(familyId, newFamilyData) {
+    try {
+      console.log('🔄 Redis: Updating complete family data');
+      
+      // Add metadata
+      newFamilyData.familyId = familyId;
+      newFamilyData.lastUpdated = new Date().toISOString();
+      
+      await this.client.set(familyId, JSON.stringify(newFamilyData));
+      
+      console.log('✅ Redis: Complete family data updated');
+      
+      // Notify all family members
+      await this._notifyParents(familyId, {
+        type: 'familyDataUpdated',
+        timestamp: new Date().toISOString()
+      });
+      
+      return { success: true, familyId, lastUpdated: newFamilyData.lastUpdated };
+    } catch (error) {
+      console.error('❌ Redis: Error updating family data:', error);
+      throw error;
+    }
+  }
+
+  // NEW: Award bonus time
+  async awardBonusTime(familyId, kidId, bonusData) {
+    try {
+      console.log(`🔄 Redis: Awarding bonus time for kid ${kidId}:`, bonusData);
+      
+      const result = await this.addSession(familyId, kidId, {
+        ...bonusData,
+        bonus: true,
+        countTowardsTotal: false,
+        duration: bonusData.timeAwarded || 0
+      });
+      
+      return { success: true, bonusAwarded: bonusData, session: result };
+    } catch (error) {
+      console.error('❌ Redis: Error awarding bonus time:', error);
+      throw error;
+    }
+  }
+
+  // NEW: Get usage history
+  async getUsageHistory(familyId, kidId, startDate, endDate) {
+    try {
+      console.log(`🔄 Redis: Getting usage history for kid ${kidId} from ${startDate} to ${endDate}`);
+      
+      const familyData = await this._getFamilyDataRaw(familyId);
+      
+      if (!familyData.kidsData[kidId]) {
+        throw new Error(`Kid ${kidId} not found`);
+      }
+      
+      // Filter sessions by date range
+      const sessions = familyData.kidsData[kidId].sessions || [];
+      const filteredSessions = sessions.filter(session => {
+        if (!startDate && !endDate) return true;
+        
+        const sessionDate = session.date;
+        if (startDate && sessionDate < startDate) return false;
+        if (endDate && sessionDate > endDate) return false;
+        
+        return true;
+      });
+      
+      return {
+        kidId,
+        kidName: familyData.kidsData[kidId].name,
+        startDate,
+        endDate,
+        sessions: filteredSessions,
+        totalSessions: filteredSessions.length,
+        totalTime: filteredSessions.reduce((sum, s) => sum + (s.duration || 0), 0)
+      };
+    } catch (error) {
+      console.error('❌ Redis: Error getting usage history:', error);
+      throw error;
+    }
+  }
+
+  // NEW: Export family data
+  async exportFamilyData(familyId, format = 'json') {
+    try {
+      console.log(`🔄 Redis: Exporting family data in ${format} format`);
+      
+      const familyData = await this._getFamilyDataRaw(familyId);
+      
+      return {
+        familyId,
+        format,
+        exportedAt: new Date().toISOString(),
+        data: familyData
+      };
+    } catch (error) {
+      console.error('❌ Redis: Error exporting family data:', error);
+      throw error;
+    }
+  }
+
   // Private helper methods
   async _getFamilyDataRaw(familyId) {
     const rawData = await this.client.get(familyId);
@@ -337,6 +543,14 @@ class RedisService {
 
   async _notifyKid(familyId, kidId, message) {
     await this.publisher.publish(`${familyId}_${kidId}`, JSON.stringify({
+      ...message,
+      timestamp: new Date().toISOString()
+    }));
+  }
+
+  // Add missing _notifyParent method
+  async _notifyParent(familyId, message) {
+    await this.publisher.publish(`${familyId}_parents`, JSON.stringify({
       ...message,
       timestamp: new Date().toISOString()
     }));
