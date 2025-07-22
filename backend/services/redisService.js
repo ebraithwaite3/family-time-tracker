@@ -31,52 +31,54 @@ class RedisService {
     try {
       const rawData = await this.client.get(familyId);
       if (!rawData) return null;
-
+  
       const familyData = JSON.parse(rawData);
-
+  
       if (userType === 'parent') {
         // Parents see everything - return structured data
         const kidsData = {};
         
-        // Build kids data with their settings merged in
-        Object.keys(familyData.kidsData || {}).forEach(kidId => {
-          const kid = familyData.kidsData[kidId];
-          const kidSettings = familyData.settings?.kidsSettings?.[kidId] || {};
-          
-          kidsData[kidId] = {
-            id: kid.id,
-            name: kid.name,
-            devices: kid.devices,
-            sessions: kid.sessions || [],
-            settings: kidSettings
-          };
-        });
-
+        // Build kids data from the actual structure (familyData.kids)
+        if (familyData.kids) {
+          Object.keys(familyData.kids).forEach(kidId => {
+            const kid = familyData.kids[kidId];
+            const kidSettings = familyData.settings?.kidsSettings?.[kidId] || {};
+            
+            kidsData[kidId] = {
+              id: kid.id,
+              name: kid.name,
+              devices: kid.devices || [],
+              sessions: kid.sessions || [],
+              settings: kidSettings
+            };
+          });
+        }
+  
         return {
           familyId: familyData.familyId,
           myData: {
             id: userId,
-            name: familyData.parents?.[userId]?.name,
+            name: familyData.parents?.[userId]?.name || userId,
             devices: familyData.parents?.[userId]?.devices || []
           },
-          kidsData,
+          kidsData, // This will now have Jack and Ellie with their sessions and settings
           settings: familyData.settings,
           lastUpdated: familyData.lastUpdated
         };
         
       } else if (userType === 'kid' && userId) {
         // Kids only see their own data with settings merged
-        const kid = familyData.kidsData?.[userId];
+        const kid = familyData.kids?.[userId];
         const kidSettings = familyData.settings?.kidsSettings?.[userId] || {};
         
         if (!kid) return null;
-
+  
         return {
           familyId: familyData.familyId,
           myData: {
             id: kid.id,
             name: kid.name,
-            devices: kid.devices,
+            devices: kid.devices || [],
             sessions: kid.sessions || [],
             settings: kidSettings
           },
@@ -88,7 +90,7 @@ class RedisService {
           lastUpdated: familyData.lastUpdated
         };
       }
-
+  
       return null;
     } catch (error) {
       console.error('Error getting family data:', error);
