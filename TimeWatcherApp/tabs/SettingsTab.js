@@ -535,7 +535,9 @@ const SettingsTab = ({ userName, selectedKid, onKidChange }) => {
     </ScrollView>
   );
 
-  const renderMasterSettings = () => (
+  // Replace the renderMasterSettings function with this corrected version:
+
+const renderMasterSettings = () => (
     <ScrollView
       style={styles.settingsContent}
       showsVerticalScrollIndicator={false}
@@ -548,16 +550,259 @@ const SettingsTab = ({ userName, selectedKid, onKidChange }) => {
           Configure settings that will be applied to all children. This will
           overwrite individual settings.
         </Text>
-
-        {/* Same form as individual but will apply to all kids */}
         <Text style={[styles.warningText, { color: "#ff8800" }]}>
           ⚠️ Warning: Applying master settings will overwrite all individual
           child settings!
         </Text>
       </View>
-
-      {/* Show same settings form as individual */}
-      {renderIndividualSettings()}
+  
+      {/* Time Limits Section */}
+      <View
+        style={[styles.section, { backgroundColor: theme.menuBackground }]}
+      >
+        <Text style={[styles.sectionTitle, { color: theme.text }]}>
+          ⏰ Daily Time Limits
+        </Text>
+  
+        <Text style={[styles.subsectionTitle, { color: theme.text }]}>
+          Weekday Schedule
+        </Text>
+        {renderNumberInput(
+          "Daily Total",
+          "limits.weekday.dailyTotal",
+          "90"
+        )}
+  
+        <Text style={[styles.subsectionTitle, { color: theme.text }]}>
+          Weekend Schedule
+        </Text>
+        {renderNumberInput(
+          "Daily Total",
+          "limits.weekend.dailyTotal",
+          "120"
+        )}
+      </View>
+  
+      {/* Bedtime Restrictions */}
+      <View
+        style={[styles.section, { backgroundColor: theme.menuBackground }]}
+      >
+        <Text style={[styles.sectionTitle, { color: theme.text }]}>
+          🌙 Bedtime Restrictions
+        </Text>
+  
+        <Text style={[styles.subsectionTitle, { color: theme.text }]}>
+          Weekday Schedule
+        </Text>
+        {renderTimeInput(
+          "Bedtime",
+          "bedtimeRestrictions.weekday.bedtime",
+          "20:30"
+        )}
+        {renderTimeInput(
+          "Wake Time",
+          "bedtimeRestrictions.weekday.wakeTime",
+          "07:00"
+        )}
+  
+        <Text style={[styles.subsectionTitle, { color: theme.text }]}>
+          Weekend Schedule
+        </Text>
+        {renderTimeInput(
+          "Bedtime",
+          "bedtimeRestrictions.weekend.bedtime",
+          "21:30"
+        )}
+        {renderTimeInput(
+          "Wake Time",
+          "bedtimeRestrictions.weekend.wakeTime",
+          "08:00"
+        )}
+      </View>
+  
+      {/* Bonus Activities */}
+      <View
+        style={[styles.section, { backgroundColor: theme.menuBackground }]}
+      >
+        <Text style={[styles.sectionTitle, { color: theme.text }]}>
+          💰 Bonus Activities
+        </Text>
+  
+        {/* Soccer */}
+        <View style={styles.bonusActivity}>
+          <Text style={[styles.activityName, { color: theme.text }]}>
+            ⚽ Soccer
+          </Text>
+          {renderSwitchInput("Enabled", "bonusActivities.soccer.enabled")}
+          {getValueByPath(
+            localSettings,
+            "bonusActivities.soccer.enabled"
+          ) && (
+            <>
+              {renderFloatInput(
+                "Ratio (screen:activity)",
+                "bonusActivities.soccer.ratio"
+              )}
+              {renderNumberInput(
+                "Daily Max",
+                "bonusActivities.soccer.dailyMax",
+                "30"
+              )}
+            </>
+          )}
+        </View>
+  
+        {/* Fitness */}
+        <View style={styles.bonusActivity}>
+          <Text style={[styles.activityName, { color: theme.text }]}>
+            🏃 Fitness
+          </Text>
+          {renderSwitchInput("Enabled", "bonusActivities.fitness.enabled")}
+          {getValueByPath(
+            localSettings,
+            "bonusActivities.fitness.enabled"
+          ) && (
+            <>
+              {renderFloatInput(
+                "Ratio (screen:activity)",
+                "bonusActivities.fitness.ratio"
+              )}
+              {renderNumberInput(
+                "Daily Max",
+                "bonusActivities.fitness.dailyMax",
+                "30"
+              )}
+            </>
+          )}
+        </View>
+  
+        {/* Reading */}
+        <View style={styles.bonusActivity}>
+          <Text style={[styles.activityName, { color: theme.text }]}>
+            📚 Reading
+          </Text>
+          {renderSwitchInput("Enabled", "bonusActivities.reading.enabled")}
+          {getValueByPath(
+            localSettings,
+            "bonusActivities.reading.enabled"
+          ) && (
+            <>
+              {renderFloatInput(
+                "Ratio (screen:activity)",
+                "bonusActivities.reading.ratio"
+              )}
+              {renderNumberInput(
+                "Daily Max",
+                "bonusActivities.reading.dailyMax",
+                "30"
+              )}
+            </>
+          )}
+        </View>
+      </View>
+  
+      {/* Device Limits */}
+      <View
+        style={[styles.section, { backgroundColor: theme.menuBackground }]}
+      >
+        <Text style={[styles.sectionTitle, { color: theme.text }]}>
+          📱 Device Limits
+        </Text>
+  
+        <Text style={[styles.subsectionTitle, { color: theme.text }]}>
+          Weekday Limits
+        </Text>
+        {Object.keys(
+          getValueByPath(localSettings, "limits.weekday.perDevice") || {}
+        ).map((deviceId) => (
+          <View key={`weekday-${deviceId}`}>
+            {renderNumberInput(
+              deviceId
+                .replace("_", " ")
+                .replace(/\b\w/g, (l) => l.toUpperCase()),
+              `limits.weekday.perDevice.${deviceId}`,
+              "90"
+            )}
+          </View>
+        ))}
+  
+        <Text style={[styles.subsectionTitle, { color: theme.text }]}>
+          Weekend Limits
+        </Text>
+        {Object.keys(
+          getValueByPath(localSettings, "limits.weekend.perDevice") || {}
+        ).map((deviceId) => (
+          <View key={`weekend-${deviceId}`}>
+            {renderNumberInput(
+              deviceId
+                .replace("_", " ")
+                .replace(/\b\w/g, (l) => l.toUpperCase()),
+              `limits.weekend.perDevice.${deviceId}`,
+              "120"
+            )}
+          </View>
+        ))}
+      </View>
+  
+      {/* App Limits */}
+      <View
+        style={[styles.section, { backgroundColor: theme.menuBackground }]}
+      >
+        <Text style={[styles.sectionTitle, { color: theme.text }]}>
+          🎮 App Limits
+        </Text>
+  
+        <Text style={[styles.subsectionTitle, { color: theme.text }]}>
+          Weekday Limits
+        </Text>
+        {Object.keys(
+          getValueByPath(localSettings, "limits.weekday.perApp") || {}
+        ).map((appId) => (
+          <View key={`weekday-app-${appId}`}>
+            {renderNumberInput(
+              appId
+                .replace(/([A-Z])/g, " $1")
+                .replace(/^./, (str) => str.toUpperCase()),
+              `limits.weekday.perApp.${appId}`,
+              "60"
+            )}
+          </View>
+        ))}
+  
+        <Text style={[styles.subsectionTitle, { color: theme.text }]}>
+          Weekend Limits
+        </Text>
+        {Object.keys(
+          getValueByPath(localSettings, "limits.weekend.perApp") || {}
+        ).map((appId) => (
+          <View key={`weekend-app-${appId}`}>
+            {renderNumberInput(
+              appId
+                .replace(/([A-Z])/g, " $1")
+                .replace(/^./, (str) => str.toUpperCase()),
+              `limits.weekend.perApp.${appId}`,
+              "90"
+            )}
+          </View>
+        ))}
+      </View>
+  
+      {/* Parent Approval Settings */}
+      <View
+        style={[styles.section, { backgroundColor: theme.menuBackground }]}
+      >
+        <Text style={[styles.sectionTitle, { color: theme.text }]}>
+          ✋ Parent Approval Required
+        </Text>
+        {renderSwitchInput(
+          "Bonus Time Requests",
+          "requireParentApproval.bonusTime"
+        )}
+        {renderSwitchInput(
+          "Session Edits",
+          "requireParentApproval.sessionEdits"
+        )}
+      </View>
     </ScrollView>
   );
 

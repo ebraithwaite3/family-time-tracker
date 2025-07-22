@@ -386,53 +386,68 @@ class RedisService {
   }
 
   // NEW: Apply master settings to all kids
-  async applyMasterSettings(familyId, masterSettings) {
-    try {
-      console.log('🔄 Redis: Applying master settings to all kids');
-      
-      const familyData = await this._getFamilyDataRaw(familyId);
-      
-      const updatedKids = [];
-      
-      // Apply settings to each kid
-      Object.keys(familyData.kidsData).forEach(kidId => {
-        familyData.kidsData[kidId].settings = JSON.parse(JSON.stringify(masterSettings));
-        updatedKids.push({
-          kidId,
-          name: familyData.kidsData[kidId].name
-        });
-      });
-      
-      await this._saveFamilyData(familyId, familyData);
-      
-      console.log(`✅ Redis: Master settings applied to ${updatedKids.length} kids`);
-      
-      // Notify parents
-      await this._notifyParents(familyId, {
-        type: 'masterSettingsApplied',
-        settings: masterSettings,
-        affectedKids: updatedKids
-      });
-      
-      // Notify each kid
-      for (const kid of updatedKids) {
-        await this._notifyKid(familyId, kid.kidId, {
-          type: 'mySettingsUpdated',
-          settings: masterSettings,
-          source: 'master'
-        });
-      }
-      
-      return { 
-        success: true, 
-        affectedKids: updatedKids,
-        settings: masterSettings 
-      };
-    } catch (error) {
-      console.error('❌ Redis: Error applying master settings:', error);
-      throw error;
+  // Replace the applyMasterSettings function in redisService.js with this:
+
+async applyMasterSettings(familyId, masterSettings) {
+  try {
+    console.log('🔄 Redis: Applying master settings to all kids');
+    
+    const familyData = await this._getFamilyDataRaw(familyId);
+    
+    // Make sure we have kids data and settings structure
+    if (!familyData.kids) {
+      throw new Error('No kids found in family data');
     }
+    
+    // Ensure settings structure exists
+    if (!familyData.settings) {
+      familyData.settings = {};
+    }
+    if (!familyData.settings.kidsSettings) {
+      familyData.settings.kidsSettings = {};
+    }
+    
+    const updatedKids = [];
+    
+    // Apply settings to each kid in the settings.kidsSettings structure
+    Object.keys(familyData.kids).forEach(kidId => {
+      familyData.settings.kidsSettings[kidId] = JSON.parse(JSON.stringify(masterSettings));
+      updatedKids.push({
+        kidId,
+        name: familyData.kids[kidId].name  // Use familyData.kids, not kidsData
+      });
+    });
+    
+    await this._saveFamilyData(familyId, familyData);
+    
+    console.log(`✅ Redis: Master settings applied to ${updatedKids.length} kids`);
+    
+    // Notify parents
+    await this._notifyParents(familyId, {
+      type: 'masterSettingsApplied',
+      settings: masterSettings,
+      affectedKids: updatedKids
+    });
+    
+    // Notify each kid
+    for (const kid of updatedKids) {
+      await this._notifyKid(familyId, kid.kidId, {
+        type: 'mySettingsUpdated',
+        settings: masterSettings,
+        source: 'master'
+      });
+    }
+    
+    return { 
+      success: true, 
+      affectedKids: updatedKids,
+      settings: masterSettings 
+    };
+  } catch (error) {
+    console.error('❌ Redis: Error applying master settings:', error);
+    throw error;
   }
+}
 
   // NEW: Update complete family data
   async updateFamilyData(familyId, newFamilyData) {
