@@ -7,10 +7,10 @@ import {
   StyleSheet,
   Switch,
   Alert,
-  Platform, // Import Platform for iOS/Android specific styling if needed
+  StatusBar,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useTheme } from '../context/ThemeContext'; // Adjust path if needed
+import { useTheme } from '../context/ThemeContext';
 
 const Header = ({ userName, onNameCleared }) => {
   const { theme, toggleTheme, currentTheme } = useTheme();
@@ -38,14 +38,14 @@ const Header = ({ userName, onNameCleared }) => {
           onPress: async () => {
             try {
               await AsyncStorage.removeItem('userName');
-              await AsyncStorage.removeItem('isParent'); // Ensure isParent is also cleared
+              await AsyncStorage.removeItem('isParent');
               if (onNameCleared) {
-                onNameCleared(); // Call the logout function passed from RootLayout
+                onNameCleared();
               }
               closeMenu();
             } catch (error) {
-              console.error('Error clearing name from AsyncStorage:', error); // Use console.error
-              Alert.alert('Error', 'Failed to log out. Please try again.'); // User-friendly alert
+              console.error('Error clearing name from AsyncStorage:', error);
+              Alert.alert('Error', 'Failed to log out. Please try again.');
             }
           },
         },
@@ -55,9 +55,19 @@ const Header = ({ userName, onNameCleared }) => {
 
   return (
     <>
-      <View style={[styles.header, { backgroundColor: theme.headerBackground }]}>
+      <StatusBar 
+        barStyle={theme.isDark ? 'light-content' : 'dark-content'} 
+        backgroundColor={theme.headerBackground} 
+      />
+      <View style={[
+        styles.header, 
+        { 
+          backgroundColor: theme.headerBackground,
+          paddingTop: 50, // Fixed padding instead of safe area
+        }
+      ]}>
         <Text style={[styles.greeting, { color: theme.headerText }]}>
-          Hi, {userName || 'User'}! 👋 {/* Provide a fallback for userName */}
+          Hi, {userName || 'User'}! 👋
         </Text>
         
         <TouchableOpacity onPress={openMenu} style={styles.hamburgerButton}>
@@ -79,7 +89,13 @@ const Header = ({ userName, onNameCleared }) => {
           activeOpacity={1} 
           onPress={closeMenu}
         >
-          <View style={[styles.menuContainer, { backgroundColor: theme.menuBackground }]}>
+          <View style={[
+            styles.menuContainer, 
+            { 
+              backgroundColor: theme.menuBackground,
+              marginTop: 100, // Fixed position
+            }
+          ]}>
             
             {/* Theme Toggle */}
             <View style={styles.menuItem}>
@@ -121,17 +137,15 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     paddingHorizontal: 20,
-    paddingVertical: 16,
-    // Add padding for notch/status bar on iOS
-    paddingTop: Platform.OS === 'ios' ? 40 : 16, // Adjust as needed for safe area
+    paddingBottom: 16,
     elevation: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 3,
-    zIndex: 10, // Ensure header is above other content
+    zIndex: 10,
   },
   greeting: {
     fontSize: 18,
@@ -155,7 +169,6 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   menuContainer: {
-    marginTop: Platform.OS === 'ios' ? 90 : 60, // Adjust position based on header padding
     marginRight: 20,
     borderRadius: 8,
     minWidth: 200,
