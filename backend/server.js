@@ -288,6 +288,20 @@ app.post('/api/family/:familyId/kids/:kidId/quick-add', async (req, res) => {
   }
 });
 
+// Update available apps for a family
+app.put('/api/family/:familyId/apps', async (req, res) => {
+    try {
+      const { familyId } = req.params;
+      const { availableApps } = req.body;
+      
+      const result = await redisService.updateAvailableApps(familyId, availableApps);
+      res.json(result);
+    } catch (error) {
+      console.error('Error updating available apps:', error);
+      res.status(500).json({ error: 'Failed to update available apps' });
+    }
+  });
+
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Family Time Tracker server running on http://0.0.0.0:${PORT}`);

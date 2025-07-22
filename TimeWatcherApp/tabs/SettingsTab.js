@@ -12,7 +12,8 @@ import {
 import { useTheme } from "../context/ThemeContext";
 import { useData } from "../context/DataContext";
 import CustomDropdown from "../components/CustomDropdown";
-import apiService from "../services/apiService"; // Adjust path if needed
+import apiService from "../services/apiService";
+import AddAppModal from "../components/AddAppModal";
 
 const SettingsTab = ({ userName, selectedKid, onKidChange }) => {
   const { theme } = useTheme();
@@ -21,6 +22,8 @@ const SettingsTab = ({ userName, selectedKid, onKidChange }) => {
   const [settingsMode, setSettingsMode] = useState("individual");
   const [hasChanges, setHasChanges] = useState(false);
   const [localSettings, setLocalSettings] = useState({});
+  const [showAddAppModal, setShowAddAppModal] = useState(false);
+const [globalAppsLocal, setGlobalAppsLocal] = useState({});
 
   const kidsCount = familyData?.kidsData
     ? Object.keys(familyData.kidsData).length
@@ -33,17 +36,70 @@ const SettingsTab = ({ userName, selectedKid, onKidChange }) => {
 
   // Initialize local settings when kid changes or component mounts
   useEffect(() => {
-    if (settingsMode === 'individual' && currentKidSettings) {
+    if (settingsMode === "individual" && currentKidSettings) {
       setLocalSettings(JSON.parse(JSON.stringify(currentKidSettings)));
       setHasChanges(false);
-    } else if (settingsMode === 'master') {
+    } else if (settingsMode === "master") {
       // Initialize with template settings for master mode
-      const firstKidSettings = familyData?.kidsData ? 
-        Object.values(familyData.kidsData)[0]?.settings : {};
+      const firstKidSettings = familyData?.kidsData
+        ? Object.values(familyData.kidsData)[0]?.settings
+        : {};
       setLocalSettings(JSON.parse(JSON.stringify(firstKidSettings || {})));
       setHasChanges(false);
     }
-  }, [selectedKid, settingsMode, familyData?.lastUpdated]); 
+  
+    // Initialize global apps whenever family data changes
+    if (familyData?.settings?.availableApps) {
+      setGlobalAppsLocal(JSON.parse(JSON.stringify(familyData.settings.availableApps)));
+    }
+  }, [selectedKid, settingsMode, familyData?.lastUpdated]);
+
+  const handleAddApp = (appId, appData) => {
+    const updatedApps = {
+      ...globalAppsLocal,
+      [appId]: appData
+    };
+    setGlobalAppsLocal(updatedApps);
+    setHasChanges(true);
+  };
+  
+  const handleRemoveApp = (appId) => {
+    const app = globalAppsLocal[appId];
+    if (!app?.custom) {
+      Alert.alert('Error', 'Cannot remove built-in apps');
+      return;
+    }
+  
+    Alert.alert(
+      'Remove App',
+      `Are you sure you want to remove ${app.displayName}? This will affect all children.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => {
+            const updatedApps = { ...globalAppsLocal };
+            delete updatedApps[appId];
+            setGlobalAppsLocal(updatedApps);
+            setHasChanges(true);
+          }
+        }
+      ]
+    );
+  };
+  
+  const handleGlobalAppToggle = (appId, enabled) => {
+    const updatedApps = {
+      ...globalAppsLocal,
+      [appId]: {
+        ...globalAppsLocal[appId],
+        available: enabled
+      }
+    };
+    setGlobalAppsLocal(updatedApps);
+    setHasChanges(true);
+  };
 
   const handleSettingChange = (path, value) => {
     setHasChanges(true);
@@ -71,7 +127,7 @@ const SettingsTab = ({ userName, selectedKid, onKidChange }) => {
         // Save individual settings to backend
         console.log("Saving individual settings for:", selectedKid);
         console.log("Settings:", localSettings);
-
+  
         // Use the new API method
         const result = await apiService.updateKidSettings(
           "braithwaite_family_tracker",
@@ -79,25 +135,25 @@ const SettingsTab = ({ userName, selectedKid, onKidChange }) => {
           localSettings
         );
         console.log("API response:", result);
-
+  
         // Update local family data only after successful API call
         const updatedFamilyData = JSON.parse(JSON.stringify(familyData));
         updatedFamilyData.kidsData[selectedKid].settings = localSettings;
         updateLocalFamilyData(updatedFamilyData);
-
+  
         Alert.alert("Success", `Settings saved for ${currentKidData?.name}!`);
       } else {
         // Apply master settings to all kids
         console.log("Applying master settings to all kids");
         console.log("Settings:", localSettings);
-
+  
         // Use the new master settings API method
         const result = await apiService.applyMasterSettings(
           "braithwaite_family_tracker",
           localSettings
         );
         console.log("Master settings API response:", result);
-
+  
         // Update local family data for all kids
         const updatedFamilyData = JSON.parse(JSON.stringify(familyData));
         Object.keys(updatedFamilyData.kidsData).forEach((kidId) => {
@@ -106,10 +162,29 @@ const SettingsTab = ({ userName, selectedKid, onKidChange }) => {
           );
         });
         updateLocalFamilyData(updatedFamilyData);
-
+  
         Alert.alert("Success", "Master settings applied to all children!");
       }
-
+  
+      // Save global apps if they changed
+      if (JSON.stringify(globalAppsLocal) !== JSON.stringify(familyData?.settings?.availableApps)) {
+        console.log("Saving global apps:", globalAppsLocal);
+        
+        const appsResult = await apiService.updateAvailableApps(
+          "braithwaite_family_tracker",
+          globalAppsLocal
+        );
+        console.log("Apps API response:", appsResult);
+  
+        // Update local family data with new apps
+        const updatedFamilyData = JSON.parse(JSON.stringify(familyData));
+        if (!updatedFamilyData.settings) updatedFamilyData.settings = {};
+        updatedFamilyData.settings.availableApps = globalAppsLocal;
+        updateLocalFamilyData(updatedFamilyData);
+  
+        console.log("✅ Global apps saved successfully");
+      }
+  
       setHasChanges(false);
     } catch (error) {
       console.error("Error saving settings:", error);
@@ -134,6 +209,12 @@ const SettingsTab = ({ userName, selectedKid, onKidChange }) => {
                 Object.values(familyData?.kidsData || {})[0]?.settings || {};
               setLocalSettings(JSON.parse(JSON.stringify(firstKidSettings)));
             }
+            
+            // Reset global apps to original state
+            if (familyData?.settings?.availableApps) {
+              setGlobalAppsLocal(JSON.parse(JSON.stringify(familyData.settings.availableApps)));
+            }
+            
             setHasChanges(false);
           },
         },
@@ -428,90 +509,86 @@ const SettingsTab = ({ userName, selectedKid, onKidChange }) => {
             </View>
           </View>
 
-          {/* Device Limits */}
+          {/* Available Apps Section - replaces App Limits */}
           <View
             style={[styles.section, { backgroundColor: theme.menuBackground }]}
           >
             <Text style={[styles.sectionTitle, { color: theme.text }]}>
-              📱 Device Limits
+              📱 Available Apps
+            </Text>
+            <Text style={[styles.sectionDescription, { color: theme.text }]}>
+              Apps that kids can select from during sessions
             </Text>
 
-            <Text style={[styles.subsectionTitle, { color: theme.text }]}>
-              Weekday Limits
-            </Text>
-            {Object.keys(
-              getValueByPath(localSettings, "limits.weekday.perDevice") || {}
-            ).map((deviceId) => (
-              <View key={`weekday-${deviceId}`}>
-                {renderNumberInput(
-                  deviceId
-                    .replace("_", " ")
-                    .replace(/\b\w/g, (l) => l.toUpperCase()),
-                  `limits.weekday.perDevice.${deviceId}`,
-                  "90"
-                )}
-              </View>
-            ))}
+            {/* Minecraft */}
+            <View style={styles.appRule}>
+              <Text style={[styles.appName, { color: theme.text }]}>
+                ⛏️ Minecraft
+              </Text>
+              {renderSwitchInput("Available", "appRules.minecraft.available")}
+            </View>
 
-            <Text style={[styles.subsectionTitle, { color: theme.text }]}>
-              Weekend Limits
-            </Text>
-            {Object.keys(
-              getValueByPath(localSettings, "limits.weekend.perDevice") || {}
-            ).map((deviceId) => (
-              <View key={`weekend-${deviceId}`}>
-                {renderNumberInput(
-                  deviceId
-                    .replace("_", " ")
-                    .replace(/\b\w/g, (l) => l.toUpperCase()),
-                  `limits.weekend.perDevice.${deviceId}`,
-                  "120"
-                )}
-              </View>
-            ))}
-          </View>
+            {/* Roblox */}
+            <View style={styles.appRule}>
+              <Text style={[styles.appName, { color: theme.text }]}>
+                🎮 Roblox
+              </Text>
+              {renderSwitchInput("Available", "appRules.roblox.available")}
+            </View>
 
-          {/* App Limits */}
-          <View
-            style={[styles.section, { backgroundColor: theme.menuBackground }]}
-          >
-            <Text style={[styles.sectionTitle, { color: theme.text }]}>
-              🎮 App Limits
-            </Text>
+            {/* Netflix */}
+            <View style={styles.appRule}>
+              <Text style={[styles.appName, { color: theme.text }]}>
+                📺 Netflix
+              </Text>
+              {renderSwitchInput("Available", "appRules.netflix.available")}
+            </View>
 
-            <Text style={[styles.subsectionTitle, { color: theme.text }]}>
-              Weekday Limits
-            </Text>
-            {Object.keys(
-              getValueByPath(localSettings, "limits.weekday.perApp") || {}
-            ).map((appId) => (
-              <View key={`weekday-app-${appId}`}>
-                {renderNumberInput(
-                  appId
-                    .replace(/([A-Z])/g, " $1")
-                    .replace(/^./, (str) => str.toUpperCase()),
-                  `limits.weekday.perApp.${appId}`,
-                  "60"
-                )}
-              </View>
-            ))}
+            {/* Disney+ */}
+            <View style={styles.appRule}>
+              <Text style={[styles.appName, { color: theme.text }]}>
+                🏰 Disney+
+              </Text>
+              {renderSwitchInput("Available", "appRules.disneyPlus.available")}
+            </View>
 
-            <Text style={[styles.subsectionTitle, { color: theme.text }]}>
-              Weekend Limits
-            </Text>
-            {Object.keys(
-              getValueByPath(localSettings, "limits.weekend.perApp") || {}
-            ).map((appId) => (
-              <View key={`weekend-app-${appId}`}>
-                {renderNumberInput(
-                  appId
-                    .replace(/([A-Z])/g, " $1")
-                    .replace(/^./, (str) => str.toUpperCase()),
-                  `limits.weekend.perApp.${appId}`,
-                  "90"
-                )}
-              </View>
-            ))}
+            {/* Pokémon GO */}
+            <View style={styles.appRule}>
+              <Text style={[styles.appName, { color: theme.text }]}>
+                🔴 Pokémon GO
+              </Text>
+              {renderSwitchInput("Available", "appRules.pokemonGo.available")}
+              <Text style={[styles.appDescription, { color: theme.text }]}>
+                Has activity toggle - doesn't count when exercising
+              </Text>
+            </View>
+
+            {/* Peacock */}
+            <View style={styles.appRule}>
+              <Text style={[styles.appName, { color: theme.text }]}>
+                🦚 Peacock
+              </Text>
+              {renderSwitchInput("Available", "appRules.peacock.available")}
+            </View>
+
+            {/* Other Games */}
+            <View style={styles.appRule}>
+              <Text style={[styles.appName, { color: theme.text }]}>
+                🎯 Other Games
+              </Text>
+              {renderSwitchInput("Available", "appRules.games.available")}
+            </View>
+
+            {/* Coloring Apps */}
+            <View style={styles.appRule}>
+              <Text style={[styles.appName, { color: theme.text }]}>
+                🎨 Coloring Apps
+              </Text>
+              {renderSwitchInput("Available", "appRules.coloring.available")}
+              <Text style={[styles.appDescription, { color: theme.text }]}>
+                First 20 minutes free daily, then counts toward total
+              </Text>
+            </View>
           </View>
 
           {/* Parent Approval Settings */}
@@ -537,7 +614,7 @@ const SettingsTab = ({ userName, selectedKid, onKidChange }) => {
 
   // Replace the renderMasterSettings function with this corrected version:
 
-const renderMasterSettings = () => (
+  const renderMasterSettings = () => (
     <ScrollView
       style={styles.settingsContent}
       showsVerticalScrollIndicator={false}
@@ -555,42 +632,30 @@ const renderMasterSettings = () => (
           child settings!
         </Text>
       </View>
-  
+
       {/* Time Limits Section */}
-      <View
-        style={[styles.section, { backgroundColor: theme.menuBackground }]}
-      >
+      <View style={[styles.section, { backgroundColor: theme.menuBackground }]}>
         <Text style={[styles.sectionTitle, { color: theme.text }]}>
           ⏰ Daily Time Limits
         </Text>
-  
+
         <Text style={[styles.subsectionTitle, { color: theme.text }]}>
           Weekday Schedule
         </Text>
-        {renderNumberInput(
-          "Daily Total",
-          "limits.weekday.dailyTotal",
-          "90"
-        )}
-  
+        {renderNumberInput("Daily Total", "limits.weekday.dailyTotal", "90")}
+
         <Text style={[styles.subsectionTitle, { color: theme.text }]}>
           Weekend Schedule
         </Text>
-        {renderNumberInput(
-          "Daily Total",
-          "limits.weekend.dailyTotal",
-          "120"
-        )}
+        {renderNumberInput("Daily Total", "limits.weekend.dailyTotal", "120")}
       </View>
-  
+
       {/* Bedtime Restrictions */}
-      <View
-        style={[styles.section, { backgroundColor: theme.menuBackground }]}
-      >
+      <View style={[styles.section, { backgroundColor: theme.menuBackground }]}>
         <Text style={[styles.sectionTitle, { color: theme.text }]}>
           🌙 Bedtime Restrictions
         </Text>
-  
+
         <Text style={[styles.subsectionTitle, { color: theme.text }]}>
           Weekday Schedule
         </Text>
@@ -604,7 +669,7 @@ const renderMasterSettings = () => (
           "bedtimeRestrictions.weekday.wakeTime",
           "07:00"
         )}
-  
+
         <Text style={[styles.subsectionTitle, { color: theme.text }]}>
           Weekend Schedule
         </Text>
@@ -619,25 +684,20 @@ const renderMasterSettings = () => (
           "08:00"
         )}
       </View>
-  
+
       {/* Bonus Activities */}
-      <View
-        style={[styles.section, { backgroundColor: theme.menuBackground }]}
-      >
+      <View style={[styles.section, { backgroundColor: theme.menuBackground }]}>
         <Text style={[styles.sectionTitle, { color: theme.text }]}>
           💰 Bonus Activities
         </Text>
-  
+
         {/* Soccer */}
         <View style={styles.bonusActivity}>
           <Text style={[styles.activityName, { color: theme.text }]}>
             ⚽ Soccer
           </Text>
           {renderSwitchInput("Enabled", "bonusActivities.soccer.enabled")}
-          {getValueByPath(
-            localSettings,
-            "bonusActivities.soccer.enabled"
-          ) && (
+          {getValueByPath(localSettings, "bonusActivities.soccer.enabled") && (
             <>
               {renderFloatInput(
                 "Ratio (screen:activity)",
@@ -651,17 +711,14 @@ const renderMasterSettings = () => (
             </>
           )}
         </View>
-  
+
         {/* Fitness */}
         <View style={styles.bonusActivity}>
           <Text style={[styles.activityName, { color: theme.text }]}>
             🏃 Fitness
           </Text>
           {renderSwitchInput("Enabled", "bonusActivities.fitness.enabled")}
-          {getValueByPath(
-            localSettings,
-            "bonusActivities.fitness.enabled"
-          ) && (
+          {getValueByPath(localSettings, "bonusActivities.fitness.enabled") && (
             <>
               {renderFloatInput(
                 "Ratio (screen:activity)",
@@ -675,17 +732,14 @@ const renderMasterSettings = () => (
             </>
           )}
         </View>
-  
+
         {/* Reading */}
         <View style={styles.bonusActivity}>
           <Text style={[styles.activityName, { color: theme.text }]}>
             📚 Reading
           </Text>
           {renderSwitchInput("Enabled", "bonusActivities.reading.enabled")}
-          {getValueByPath(
-            localSettings,
-            "bonusActivities.reading.enabled"
-          ) && (
+          {getValueByPath(localSettings, "bonusActivities.reading.enabled") && (
             <>
               {renderFloatInput(
                 "Ratio (screen:activity)",
@@ -700,15 +754,13 @@ const renderMasterSettings = () => (
           )}
         </View>
       </View>
-  
+
       {/* Device Limits */}
-      <View
-        style={[styles.section, { backgroundColor: theme.menuBackground }]}
-      >
+      <View style={[styles.section, { backgroundColor: theme.menuBackground }]}>
         <Text style={[styles.sectionTitle, { color: theme.text }]}>
           📱 Device Limits
         </Text>
-  
+
         <Text style={[styles.subsectionTitle, { color: theme.text }]}>
           Weekday Limits
         </Text>
@@ -725,7 +777,7 @@ const renderMasterSettings = () => (
             )}
           </View>
         ))}
-  
+
         <Text style={[styles.subsectionTitle, { color: theme.text }]}>
           Weekend Limits
         </Text>
@@ -743,15 +795,13 @@ const renderMasterSettings = () => (
           </View>
         ))}
       </View>
-  
+
       {/* App Limits */}
-      <View
-        style={[styles.section, { backgroundColor: theme.menuBackground }]}
-      >
+      <View style={[styles.section, { backgroundColor: theme.menuBackground }]}>
         <Text style={[styles.sectionTitle, { color: theme.text }]}>
           🎮 App Limits
         </Text>
-  
+
         <Text style={[styles.subsectionTitle, { color: theme.text }]}>
           Weekday Limits
         </Text>
@@ -768,7 +818,7 @@ const renderMasterSettings = () => (
             )}
           </View>
         ))}
-  
+
         <Text style={[styles.subsectionTitle, { color: theme.text }]}>
           Weekend Limits
         </Text>
@@ -786,11 +836,9 @@ const renderMasterSettings = () => (
           </View>
         ))}
       </View>
-  
+
       {/* Parent Approval Settings */}
-      <View
-        style={[styles.section, { backgroundColor: theme.menuBackground }]}
-      >
+      <View style={[styles.section, { backgroundColor: theme.menuBackground }]}>
         <Text style={[styles.sectionTitle, { color: theme.text }]}>
           ✋ Parent Approval Required
         </Text>
@@ -994,6 +1042,24 @@ const styles = StyleSheet.create({
   saveText: {
     fontSize: 16,
     fontWeight: "600",
+  },
+  appRule: {
+    borderWidth: 1,
+    borderColor: "#ddd",
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+  },
+  appName: {
+    fontSize: 16,
+    fontWeight: "600",
+    marginBottom: 8,
+  },
+  appDescription: {
+    fontSize: 12,
+    opacity: 0.7,
+    marginTop: 4,
+    fontStyle: "italic",
   },
 });
 
