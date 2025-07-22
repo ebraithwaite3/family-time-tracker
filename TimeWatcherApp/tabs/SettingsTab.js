@@ -33,18 +33,17 @@ const SettingsTab = ({ userName, selectedKid, onKidChange }) => {
 
   // Initialize local settings when kid changes or component mounts
   useEffect(() => {
-    if (settingsMode === "individual" && currentKidSettings) {
+    if (settingsMode === 'individual' && currentKidSettings) {
       setLocalSettings(JSON.parse(JSON.stringify(currentKidSettings)));
       setHasChanges(false);
-    } else if (settingsMode === "master") {
+    } else if (settingsMode === 'master') {
       // Initialize with template settings for master mode
-      const firstKidSettings = familyData?.kidsData
-        ? Object.values(familyData.kidsData)[0]?.settings
-        : {};
+      const firstKidSettings = familyData?.kidsData ? 
+        Object.values(familyData.kidsData)[0]?.settings : {};
       setLocalSettings(JSON.parse(JSON.stringify(firstKidSettings || {})));
       setHasChanges(false);
     }
-  }, [selectedKid, currentKidSettings, settingsMode, familyData]);
+  }, [selectedKid, settingsMode, familyData?.lastUpdated]); 
 
   const handleSettingChange = (path, value) => {
     setHasChanges(true);

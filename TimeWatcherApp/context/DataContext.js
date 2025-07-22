@@ -33,11 +33,17 @@ export const DataProvider = ({ children, userName, isParent }) => {
 
   // This effect will now re-run when userName or isParent props change
   useEffect(() => {
+    console.log('🔍 DataProvider useEffect triggered');
+    console.log('🔍 userName:', userName);
+    console.log('🔍 isParent:', isParent);
+    
     // Only attempt to load data if a user is logged in (userName is not null/undefined)
     if (userName) { // Check if userName is provided (implies logged in)
+      console.log('🔍 Calling loadFamilyData...');
       loadFamilyData(userName, isParent); // Pass current userName and isParent from props
     } else {
       // If no user is logged in (userName is null), clear data and reset states
+      console.log('🔍 No userName - clearing data');
       setFamilyData(null);
       setIsLoadingData(false);
       setDataError(null);
@@ -47,8 +53,13 @@ export const DataProvider = ({ children, userName, isParent }) => {
 
   // loadFamilyData now accepts currentUserName and currentIsParent as arguments
   const loadFamilyData = async (currentUserName, currentIsParent) => {
+    console.log('🔍 STEP 1: loadFamilyData called');
+    console.log('🔍 STEP 2: currentUserName:', currentUserName);
+    console.log('🔍 STEP 3: currentIsParent:', currentIsParent);
+
     setIsLoadingData(true);
     setDataError(null);
+    
     try {
       // First, try to load from AsyncStorage (for offline capability)
       const storedFamilyData = await AsyncStorage.getItem('familyData');
@@ -61,23 +72,30 @@ export const DataProvider = ({ children, userName, isParent }) => {
       const userType = currentIsParent ? 'parent' : 'kid'; // Convert boolean to string for backend
       const userId = currentUserName; // Use the userName passed as prop
 
+      console.log('🔍 STEP 4: Calling API with:', { userType, userId });
+      console.log('🔍 STEP 5: API URL will be:', `https://family-time-tracker-production.up.railway.app/api/family/braithwaite_family_tracker?userType=${userType}&userId=${userId}`);
+
       console.log(`🔄 Fetching data for ${userType}: ${userId} from backend...`);
       const data = await apiService.getFamilyData('braithwaite_family_tracker', userType, userId);
+      
+      console.log('🔍 STEP 6: RAW API RESPONSE:', JSON.stringify(data, null, 2));
+      console.log('🔍 STEP 7: Setting family data...');
+      
       setFamilyData(data);
       await AsyncStorage.setItem('familyData', JSON.stringify(data)); // Cache fresh data
       console.log("✅ Successfully fetched and cached family data from backend.");
       
       // Log the new data structure
-      if (data.myData) {
+      if (data?.myData) {
         console.log("👤 My Data:", data.myData);
         if (data.myData.settings) {
           console.log("⚙️ My Settings:", data.myData.settings);
         }
       }
-      if (data.kidsData) {
+      if (data?.kidsData) {
         console.log("👨‍👩‍👧‍👦 Kids Data:", Object.keys(data.kidsData));
       }
-      if (data.globalSettings) {
+      if (data?.globalSettings) {
         console.log("🌍 Global Settings:", data.globalSettings);
       }
 
@@ -86,8 +104,10 @@ export const DataProvider = ({ children, userName, isParent }) => {
       await AsyncStorage.setItem('lastUpdated', lastUpdated);
       console.log("⏰ Last updated time saved to AsyncStorage:", lastUpdated);
 
+      console.log('🔍 STEP 8: Family data set successfully');
+
     } catch (error) {
-      console.error('❌ Error loading family data:', error);
+      console.error('❌ STEP ERROR: Error loading family data:', error);
       setDataError(error);
       // If backend fails, ensure we still use cached data if available
       const storedFamilyData = await AsyncStorage.getItem('familyData');
@@ -99,6 +119,7 @@ export const DataProvider = ({ children, userName, isParent }) => {
       }
     } finally {
       setIsLoadingData(false);
+      console.log('🔍 STEP 9: Loading complete');
     }
   };
 
@@ -124,6 +145,12 @@ export const DataProvider = ({ children, userName, isParent }) => {
 
   // Helper function to get today's sessions
   const getTodaysSessions = (kidId = null) => {
+    // If no kidId provided and we're a parent, return empty array
+    if (!kidId && isParent) {
+      console.log('📅 Parent user - no sessions to get');
+      return [];
+    }
+
     const today = todaysDate.toFormat('yyyy-MM-dd');
     let sessions = [];
     
@@ -132,7 +159,7 @@ export const DataProvider = ({ children, userName, isParent }) => {
       sessions = familyData?.kidsData?.[kidId]?.sessions?.filter(s => s.date === today) || [];
       console.log(`📅 Getting today's sessions for ${kidId}:`, sessions.length, "sessions");
     } else {
-      // Kid getting their own sessions or parent getting their own
+      // Kid getting their own sessions
       sessions = familyData?.myData?.sessions?.filter(s => s.date === today) || [];
       console.log(`📅 Getting today's sessions for current user:`, sessions.length, "sessions");
     }
@@ -142,6 +169,12 @@ export const DataProvider = ({ children, userName, isParent }) => {
 
   // Helper function to calculate used time today
   const calculateUsedTime = (kidId = null) => {
+    // If no kidId provided and we're a parent, return 0
+    if (!kidId && isParent) {
+      console.log('⏱️ Parent user - no used time to calculate');
+      return 0;
+    }
+
     const sessions = getTodaysSessions(kidId);
     const usedTime = sessions
       .filter(s => s.countTowardsTotal)
@@ -154,6 +187,12 @@ export const DataProvider = ({ children, userName, isParent }) => {
 
   // Helper function to get current limits (weekday/weekend aware)
   const getCurrentLimits = (kidId = null) => {
+    // If no kidId provided and we're a parent, return null
+    if (!kidId && isParent) {
+      console.log('📊 Parent user - no limits to get');
+      return null;
+    }
+
     const isWeekend = todaysDate.weekday >= 6; // Saturday = 6, Sunday = 7
     let limits = null;
     
@@ -175,6 +214,12 @@ export const DataProvider = ({ children, userName, isParent }) => {
 
   // Helper function to calculate remaining time
   const getRemainingTime = (kidId = null) => {
+    // If no kidId provided and we're a parent, return 0
+    if (!kidId && isParent) {
+      console.log('⏳ Parent user - no remaining time to calculate');
+      return 0;
+    }
+
     const limits = getCurrentLimits(kidId);
     const usedTime = calculateUsedTime(kidId);
     const remaining = limits ? limits.dailyTotal - usedTime : 0;
@@ -186,6 +231,12 @@ export const DataProvider = ({ children, userName, isParent }) => {
 
   // Helper function to get usage percentage
   const getUsagePercentage = (kidId = null) => {
+    // If no kidId provided and we're a parent, return 0
+    if (!kidId && isParent) {
+      console.log('📈 Parent user - no usage percentage to calculate');
+      return 0;
+    }
+
     const limits = getCurrentLimits(kidId);
     const usedTime = calculateUsedTime(kidId);
     const percentage = limits && limits.dailyTotal > 0 ? (usedTime / limits.dailyTotal) * 100 : 0;
@@ -197,6 +248,12 @@ export const DataProvider = ({ children, userName, isParent }) => {
 
   // Helper function to check if user is in bedtime
   const isInBedtime = (kidId = null) => {
+    // If no kidId provided and we're a parent, return false
+    if (!kidId && isParent) {
+      console.log('🌙 Parent user - no bedtime to check');
+      return false;
+    }
+
     const now = DateTime.now();
     const isWeekend = now.weekday >= 6;
     let bedtimeRules = null;
