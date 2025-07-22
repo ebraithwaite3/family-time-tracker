@@ -132,6 +132,9 @@ class RedisService {
       if (sessionData.app) newSession.app = sessionData.app;
       if (sessionData.bonus) newSession.bonus = true;
       if (sessionData.punishment) newSession.punishment = true;
+      if (sessionData.bonusTime) newSession.bonusTime = sessionData.bonusTime; // ADD THIS LINE
+      if (sessionData.activityType)
+        newSession.activityType = sessionData.activityType;
 
       familyData.kids[kidId].sessions.push(newSession); // USE .kids
       await this._saveFamilyData(familyId, familyData);
@@ -391,7 +394,8 @@ class RedisService {
     try {
       const familyData = await this._getFamilyDataRaw(familyId);
 
-      if (!familyData.kids[kidId]) { // USE .kids
+      if (!familyData.kids[kidId]) {
+        // USE .kids
         throw new Error(`Kid ${kidId} not found`);
       }
 
@@ -558,7 +562,8 @@ class RedisService {
 
       const familyData = await this._getFamilyDataRaw(familyId);
 
-      if (!familyData.kids[kidId]) { // USE .kids
+      if (!familyData.kids[kidId]) {
+        // USE .kids
         throw new Error(`Kid ${kidId} not found`);
       }
 
