@@ -11,6 +11,7 @@ import {
   Platform,
   TouchableWithoutFeedback,
   Keyboard,
+  TextInput, // Make sure to import TextInput
 } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import { useData } from '../context/DataContext';
@@ -25,6 +26,7 @@ const StartSessionModal = ({ visible, onClose, userName, selectedKid, userType }
   const [formData, setFormData] = useState({
     app: '',
     device: '',
+    estimatedDuration: '', // For planning purposes
     countTowardsTotal: true,
   });
 
@@ -73,6 +75,11 @@ const StartSessionModal = ({ visible, onClose, userName, selectedKid, userType }
     return 0;
   };
 
+  // Quick time selection
+  const selectQuickTime = (minutes) => {
+    updateFormField('estimatedDuration', minutes.toString());
+  };
+
   // Update form field
   const updateFormField = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -83,6 +90,7 @@ const StartSessionModal = ({ visible, onClose, userName, selectedKid, userType }
     setFormData({
       app: '',
       device: '',
+      estimatedDuration: '',
       countTowardsTotal: true,
     });
   };
@@ -96,15 +104,15 @@ const StartSessionModal = ({ visible, onClose, userName, selectedKid, userType }
   // Validation
   const validateForm = () => {
     const { app, device } = formData;
-    
+
     if (!app) return 'Please select an app';
     if (!device) return 'Please select a device';
-    
+
     const remainingTime = getRemainingTimeForValidation();
     if (formData.countTowardsTotal && remainingTime <= 0) {
       return 'No remaining screen time available today';
     }
-    
+
     return null;
   };
 
@@ -119,7 +127,7 @@ const StartSessionModal = ({ visible, onClose, userName, selectedKid, userType }
     try {
       const targetKidId = userType === 'parent' ? selectedKid : userName;
       const familyId = 'braithwaite_family_tracker';
-      
+
       const sessionData = {
         id: uuid.v4(),
         date: getTodayDate(),
@@ -146,9 +154,31 @@ const StartSessionModal = ({ visible, onClose, userName, selectedKid, userType }
       const appInfo = getAvailableApps().find(app => app.value === formData.app);
       const appName = appInfo?.label.replace(/^[^\s]+ /, '') || formData.app;
 
+      // Calculate estimated finish time and remaining time
+      const estimatedDuration = parseInt(formData.estimatedDuration) || 0;
+      let finishTimeMessage = '';
+
+      if (estimatedDuration > 0) {
+        const finishTime = new Date();
+        finishTime.setMinutes(finishTime.getMinutes() + estimatedDuration);
+        const finishTimeString = finishTime.toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+
+        if (formData.countTowardsTotal) {
+          const timeAfterSession = Math.max(0, remainingTime - estimatedDuration);
+          finishTimeMessage = `\n\nEstimated ${estimatedDuration} minute session.\nPlan to finish by ${finishTimeString}.\nYou'll have ${timeAfterSession} minutes remaining after this session.`;
+        } else {
+          finishTimeMessage = `\n\nEstimated ${estimatedDuration} minute session.\nPlan to finish by ${finishTimeString}.\nThis won't count toward your ${remainingTime} minutes remaining.`;
+        }
+      } else {
+        finishTimeMessage = `\n\nYou have ${remainingTime} minutes remaining today.`;
+      }
+
       Alert.alert(
-        'Session Started! ▶️', 
-        `${appName} session started on ${formData.device}\n\nTotal time remaining: ${remainingTime} minutes\nSession time will be deducted when you end the session.`
+        'Session Started! ▶️',
+        `${appName} session started on ${formData.device}${finishTimeMessage}`
       );
       handleClose();
     } catch (error) {
@@ -156,6 +186,38 @@ const StartSessionModal = ({ visible, onClose, userName, selectedKid, userType }
       Alert.alert('Error', `Failed to start session: ${error.message}`);
     }
   };
+
+  // Render quick time buttons
+  const renderQuickTimeButtons = () => (
+    <View style={styles.quickTimeContainer}>
+      {[15, 30, 45, 60].map(minutes => (
+        <TouchableOpacity
+          key={minutes}
+          style={[
+            styles.quickTimeButton,
+            {
+              backgroundColor: formData.estimatedDuration === minutes.toString()
+                ? theme.buttonBackground
+                : theme.background,
+              borderColor: theme.isDark ? '#444' : '#ddd',
+            }
+          ]}
+          onPress={() => selectQuickTime(minutes)}
+        >
+          <Text style={[
+            styles.quickTimeText,
+            {
+              color: formData.estimatedDuration === minutes.toString()
+                ? theme.buttonText
+                : theme.text
+            }
+          ]}>
+            {minutes}m
+          </Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
 
   const availableApps = getAvailableApps();
   const availableDevices = getDevicesForKid();
@@ -169,7 +231,7 @@ const StartSessionModal = ({ visible, onClose, userName, selectedKid, userType }
       onRequestClose={handleClose}
     >
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <KeyboardAvoidingView 
+        <KeyboardAvoidingView
           style={[styles.container, { backgroundColor: theme.background }]}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
@@ -213,6 +275,30 @@ const StartSessionModal = ({ visible, onClose, userName, selectedKid, userType }
               </View>
             )}
 
+            {/* Estimated Duration */}
+            <View style={styles.fieldContainer}>
+              <Text style={[styles.fieldLabel, { color: theme.text }]}>⏱️ Estimated Duration</Text>
+              {renderQuickTimeButtons()}
+              <TextInput
+                style={[
+                  styles.customInput,
+                  {
+                    backgroundColor: theme.menuBackground,
+                    color: theme.text,
+                    borderColor: theme.isDark ? '#444' : '#ddd',
+                  }
+                ]}
+                value={formData.estimatedDuration}
+                onChangeText={(value) => updateFormField('estimatedDuration', value)}
+                placeholder="Custom minutes"
+                placeholderTextColor={theme.isDark ? '#888' : '#666'}
+                keyboardType="numeric"
+                returnKeyType="done"
+                onSubmitEditing={Keyboard.dismiss}
+                blurOnSubmit={true}
+              />
+            </View>
+
             {/* Counts Toward Total - Only show for parents, or kids with Pokemon Go */}
             {(userType === 'parent' || (userType === 'kid' && formData.app === 'pokemonGo')) && (
               <View style={[styles.switchContainer, { backgroundColor: theme.menuBackground }]}>
@@ -228,18 +314,29 @@ const StartSessionModal = ({ visible, onClose, userName, selectedKid, userType }
               </View>
             )}
 
-            {/* Time Info */}
+            {/* Time Planning Info */}
             <View style={[styles.infoContainer, { backgroundColor: theme.isDark ? '#1A3A1A' : 'rgba(76, 175, 80, 0.1)' }]}>
               <Text style={[styles.infoTitle, { color: '#4CAF50' }]}>
-                📊 Time Available
+                📊 Time Planning
               </Text>
               <Text style={[styles.infoText, { color: theme.text }]}>
                 Total remaining today: {remainingTime} minutes
               </Text>
-              {formData.countTowardsTotal && (
-                <Text style={[styles.infoText, { color: theme.text, marginTop: 4 }]}>
-                  After this session: Unlimited (session will count toward limit when ended)
-                </Text>
+              {formData.estimatedDuration && parseInt(formData.estimatedDuration) > 0 && (
+                <>
+                  <Text style={[styles.infoText, { color: theme.text, marginTop: 4 }]}>
+                    Estimated session: {formData.estimatedDuration} minutes
+                  </Text>
+                  {formData.countTowardsTotal ? (
+                    <Text style={[styles.infoText, { color: theme.text, marginTop: 4 }]}>
+                      Time left after session: {Math.max(0, remainingTime - parseInt(formData.estimatedDuration))} minutes
+                    </Text>
+                  ) : (
+                    <Text style={[styles.infoText, { color: theme.text, marginTop: 4 }]}>
+                      Won't count toward limit - {remainingTime} minutes will remain
+                    </Text>
+                  )}
+                </>
               )}
             </View>
           </View>
@@ -254,7 +351,7 @@ const StartSessionModal = ({ visible, onClose, userName, selectedKid, userType }
                 Cancel
               </Text>
             </TouchableOpacity>
-            
+
             <TouchableOpacity
               style={[styles.submitButtonNew, { backgroundColor: '#4CAF50' }]}
               onPress={handleSubmit}
@@ -309,6 +406,34 @@ const styles = StyleSheet.create({
   },
   fieldContainer: {
     marginBottom: 24,
+  },
+  fieldLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  quickTimeContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  quickTimeButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  quickTimeText: {
+    textAlign: 'center',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  customInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    fontSize: 16,
   },
   switchContainer: {
     flexDirection: 'row',

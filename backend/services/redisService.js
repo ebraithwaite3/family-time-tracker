@@ -136,6 +136,7 @@ class RedisService {
       if (sessionData.bonusTime) newSession.bonusTime = sessionData.bonusTime; // ADD THIS LINE
       if (sessionData.activityType)
         newSession.activityType = sessionData.activityType;
+      if (sessionData.estimatedDuration) newSession.estimatedDuration = sessionData.estimatedDuration;
 
       familyData.kids[kidId].sessions.push(newSession); // USE .kids
       await this._saveFamilyData(familyId, familyData);
@@ -179,6 +180,12 @@ class RedisService {
         ...updates,
         updatedAt: new Date().toISOString(),
       };
+
+      if (updates.timeEnded) {
+        // When ending a session, remove active and estimatedDuration
+        delete sessions[sessionIndex].active;
+        delete sessions[sessionIndex].estimatedDuration;
+      }
 
       // Recalculate duration if start/end times provided
       const session = sessions[sessionIndex];
