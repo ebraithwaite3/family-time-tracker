@@ -81,7 +81,6 @@ const BonusModal = ({ visible, onClose, userName, selectedKid, userType }) => {
           label: `${icons[activityId] || '🎯'} ${displayName}`,
           value: activityId,
           ratio: activity.ratio,
-          dailyMax: activity.dailyMax,
           description: activity.description,
         });
       }
@@ -108,21 +107,17 @@ const BonusModal = ({ visible, onClose, userName, selectedKid, userType }) => {
     if (!activity || !activity.enabled) return 0;
     
     const ratio = activity.ratio || 0.5;
-    const dailyMax = activity.dailyMax || 30;
     
-    // Calculate raw bonus
-    const rawBonus = Math.floor(parseInt(activityMinutes) * ratio);
+    // Calculate bonus (no daily max cap anymore)
+    const bonusMinutes = Math.round(parseInt(activityMinutes) * ratio);
     
     // Debug logging
     console.log(`🧮 Calculating bonus for ${activityType}:`);
     console.log(`   Activity minutes: ${activityMinutes}`);
     console.log(`   Ratio: ${ratio}`);
-    console.log(`   Raw bonus: ${rawBonus}`);
-    console.log(`   Daily max: ${dailyMax}`);
-    console.log(`   Final bonus: ${Math.min(rawBonus, dailyMax)}`);
+    console.log(`   Bonus minutes: ${bonusMinutes}`);
     
-    // Cap at daily max
-    return Math.min(rawBonus, dailyMax);
+    return bonusMinutes;
   };
 
   // Get ratio display text

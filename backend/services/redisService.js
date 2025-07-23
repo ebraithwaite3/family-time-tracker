@@ -132,6 +132,7 @@ class RedisService {
       if (sessionData.app) newSession.app = sessionData.app;
       if (sessionData.bonus) newSession.bonus = true;
       if (sessionData.punishment) newSession.punishment = true;
+      if (sessionData.active) newSession.active = sessionData.active; 
       if (sessionData.bonusTime) newSession.bonusTime = sessionData.bonusTime; // ADD THIS LINE
       if (sessionData.activityType)
         newSession.activityType = sessionData.activityType;
