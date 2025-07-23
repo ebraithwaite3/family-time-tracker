@@ -161,6 +161,23 @@ app.put('/api/family/:familyId/kids/:kidId/sessions/:sessionId', async (req, res
   }
 });
 
+// Delete a session
+app.delete('/api/family/:familyId/kids/:kidId/sessions/:sessionId', async (req, res) => {
+    try {
+      const { familyId, kidId, sessionId } = req.params;
+      
+      console.log(`🗑️ Deleting session ${sessionId} for kid ${kidId}`);
+      
+      const result = await redisService.deleteSession(familyId, kidId, sessionId);
+      
+      console.log('✅ Session deleted successfully:', result);
+      res.json({ success: true, result });
+    } catch (error) {
+      console.error('❌ Error deleting session:', error);
+      res.status(500).json({ error: 'Failed to delete session' });
+    }
+  });
+
 // NEW: Update kid settings
 app.put('/api/family/:familyId/kids/:kidId/settings', async (req, res) => {
   try {

@@ -66,6 +66,17 @@ const apiService = {
     }
   },
 
+ 
+deleteSession: async (familyId, kidId, sessionId) => {
+    try {
+      const response = await api.delete(`/api/family/${familyId}/kids/${kidId}/sessions/${sessionId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error deleting session via backend:', error.message);
+      throw new Error(`Failed to delete session: ${error.message}`);
+    }
+  },
+
   // Update family settings (OLD - for backwards compatibility)
   updateSetting: async (familyId, settingPath, newValue, updatedBy) => {
     try {

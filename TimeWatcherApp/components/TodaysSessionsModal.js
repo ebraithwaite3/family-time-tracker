@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import { useData } from '../context/DataContext';
+import apiService from '../services/apiService';
 
 const TodaysSessionsModal = ({
   visible,
@@ -21,11 +22,13 @@ const TodaysSessionsModal = ({
   onSessionUpdate, // Callback when session is edited
 }) => {
   const { theme } = useTheme();
-  const { familyData } = useData();
+  const { familyData, refreshFamilyData } = useData();
   const [todaysSessions, setTodaysSessions] = useState([]);
   const [editingSession, setEditingSession] = useState(null);
+  const [deletingSession, setDeletingSession] = useState(null);
   const [passcodeVisible, setPasscodeVisible] = useState(false);
   const [passcode, setPasscode] = useState('');
+  const [passcodeAction, setPasscodeAction] = useState(''); // 'edit' or 'delete'
 
   // Get today's date in YYYY-MM-DD format
   const getTodayDate = () => {
@@ -116,6 +119,7 @@ const TodaysSessionsModal = ({
     if (userType === 'kid') {
       // Kids need to enter passcode
       setEditingSession(session);
+      setPasscodeAction('edit');
       setPasscodeVisible(true);
       setPasscode('');
     } else {
@@ -125,11 +129,27 @@ const TodaysSessionsModal = ({
   };
 
   const handleDeletePress = (session) => {
-    if (userType !== 'parent') return;
+    if (userType === 'kid') {
+      // Kids need to enter passcode
+      setDeletingSession(session);
+      setPasscodeAction('delete');
+      setPasscodeVisible(true);
+      setPasscode('');
+    } else {
+      // Parents get confirmation dialog
+      showDeleteConfirmation(session);
+    }
+  };
+
+  const showDeleteConfirmation = (session) => {
+    const appInfo = getAppInfo(session.app);
+    const sessionDesc = session.bonus ? 'bonus session' : 
+                       session.punishment ? 'punishment' : 
+                       `${appInfo.name} session`;
 
     Alert.alert(
       'Delete Session',
-      `Are you sure you want to delete this ${formatTime(session.duration)} session?`,
+      `Are you sure you want to delete this ${formatTime(session.duration)} ${sessionDesc}?`,
       [
         {
           text: 'Cancel',
@@ -146,11 +166,31 @@ const TodaysSessionsModal = ({
 
   const deleteSession = async (session) => {
     try {
-      // Here you would call your API to delete the session
-      // For now, just show success and refresh
+      const familyId = 'braithwaite_family_tracker';
+      const targetKidId = userType === 'parent' ? (session.kidId || userId) : userId;
+
+      console.log('🗑️ DELETING SESSION:', {
+        sessionId: session.id,
+        targetKidId,
+        session
+      });
+
+      // Call your delete session API
+      await apiService.deleteSession(familyId, targetKidId, session.id);
+      
+      console.log('✅ SESSION DELETED');
+
+      // Refresh data
+      refreshFamilyData();
+
+      const appInfo = getAppInfo(session.app);
+      const sessionDesc = session.bonus ? 'bonus session' : 
+                         session.punishment ? 'punishment' : 
+                         `${appInfo.name} session`;
+
       Alert.alert(
         'Session Deleted',
-        `${formatTime(session.duration)} session has been deleted.`,
+        `${formatTime(session.duration)} ${sessionDesc} has been deleted.`,
         [
           {
             text: 'OK',
@@ -164,7 +204,8 @@ const TodaysSessionsModal = ({
         ]
       );
     } catch (error) {
-      Alert.alert('Error', 'Failed to delete session');
+      console.error('❌ DELETE ERROR:', error);
+      Alert.alert('Error', `Failed to delete session: ${error.message}`);
     }
   };
 
@@ -172,12 +213,28 @@ const TodaysSessionsModal = ({
     // Updated passcode to P@rent
     if (passcode === 'P@rent') {
       setPasscodeVisible(false);
-      // Proceed with edit
-      handleSessionEdit(editingSession);
+      
+      if (passcodeAction === 'edit' && editingSession) {
+        handleSessionEdit(editingSession);
+      } else if (passcodeAction === 'delete' && deletingSession) {
+        showDeleteConfirmation(deletingSession);
+      }
+      
+      // Clear state
+      setPasscode('');
+      setPasscodeAction('');
     } else {
       Alert.alert('Incorrect Passcode', 'Please ask a parent for help.');
       setPasscode('');
     }
+  };
+
+  const handlePasscodeCancel = () => {
+    setPasscodeVisible(false);
+    setEditingSession(null);
+    setDeletingSession(null);
+    setPasscode('');
+    setPasscodeAction('');
   };
 
   const handleSessionEdit = (session) => {
@@ -191,7 +248,6 @@ const TodaysSessionsModal = ({
           style: 'cancel',
           onPress: () => {
             setEditingSession(null);
-            setPasscodeVisible(false);
           },
         },
         {
@@ -214,8 +270,29 @@ const TodaysSessionsModal = ({
 
   const updateSessionDuration = async (session, newDuration) => {
     try {
-      // Here you would call your API to update the session
-      // For now, just show success
+      const familyId = 'braithwaite_family_tracker';
+      const targetKidId = userType === 'parent' ? (session.kidId || userId) : userId;
+
+      const updates = {
+        duration: newDuration,
+        updatedAt: new Date().toISOString(),
+        updatedBy: userType === 'parent' ? 'Parent' : userId,
+      };
+
+      console.log('✏️ UPDATING SESSION:', {
+        sessionId: session.id,
+        targetKidId,
+        updates
+      });
+
+      // Call your update session API
+      await apiService.updateSession(familyId, targetKidId, session.id, updates);
+      
+      console.log('✅ SESSION UPDATED');
+
+      // Refresh data
+      refreshFamilyData();
+
       Alert.alert(
         'Session Updated',
         `Duration changed from ${formatTime(session.duration)} to ${formatTime(newDuration)}`,
@@ -224,7 +301,6 @@ const TodaysSessionsModal = ({
             text: 'OK',
             onPress: () => {
               setEditingSession(null);
-              setPasscodeVisible(false);
               if (onSessionUpdate) {
                 onSessionUpdate();
               }
@@ -234,7 +310,8 @@ const TodaysSessionsModal = ({
         ]
       );
     } catch (error) {
-      Alert.alert('Error', 'Failed to update session');
+      console.error('❌ UPDATE ERROR:', error);
+      Alert.alert('Error', `Failed to update session: ${error.message}`);
     }
   };
 
@@ -299,14 +376,12 @@ const TodaysSessionsModal = ({
                 <Text style={styles.editButtonText}>✏️</Text>
               </TouchableOpacity>
               
-              {userType === 'parent' && (
-                <TouchableOpacity
-                  style={[styles.deleteButton, { backgroundColor: '#ff4444' }]}
-                  onPress={() => handleDeletePress(session)}
-                >
-                  <Text style={styles.deleteButtonText}>🗑️</Text>
-                </TouchableOpacity>
-              )}
+              <TouchableOpacity
+                style={[styles.deleteButton, { backgroundColor: '#ff4444' }]}
+                onPress={() => handleDeletePress(session)}
+              >
+                <Text style={styles.deleteButtonText}>🗑️</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -436,7 +511,7 @@ const TodaysSessionsModal = ({
               Parent Passcode Required
             </Text>
             <Text style={[styles.passcodeMessage, { color: theme.text, opacity: 0.7 }]}>
-              Enter the parent passcode to edit sessions
+              Enter the parent passcode to {passcodeAction} sessions
             </Text>
             
             <TextInput
@@ -459,11 +534,7 @@ const TodaysSessionsModal = ({
             <View style={styles.passcodeButtons}>
               <TouchableOpacity
                 style={[styles.passcodeButton, { borderColor: theme.text }]}
-                onPress={() => {
-                  setPasscodeVisible(false);
-                  setEditingSession(null);
-                  setPasscode('');
-                }}
+                onPress={handlePasscodeCancel}
               >
                 <Text style={[styles.passcodeButtonText, { color: theme.text }]}>
                   Cancel

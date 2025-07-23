@@ -13,7 +13,7 @@ import CustomDropdown from '../components/CustomDropdown';
 // Import modals (these will need to be created)
 import QuickAddModal from '../modals/QuickAddModal';
 import StartSessionModal from '../modals/StartSessionModal';
-// import EndSessionModal from '../modals/EndSessionModal';
+import EndSessionModal from '../modals/EndSessionModal';
 import BonusModal from '../modals/BonusModal';
 import PunishmentModal from '../modals/PunishmentModal';
 

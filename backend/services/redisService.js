@@ -323,6 +323,43 @@ class RedisService {
     }
   }
 
+  // Delete a session
+async deleteSession(familyId, kidId, sessionId) {
+  try {
+    console.log(`🔄 Redis: Deleting session ${sessionId} for kid ${kidId}`);
+    
+    const familyData = await this._getFamilyDataRaw(familyId);
+    const sessions = familyData.kids[kidId].sessions;
+    const sessionIndex = sessions.findIndex((s) => s.id === sessionId);
+
+    if (sessionIndex === -1) {
+      throw new Error("Session not found");
+    }
+
+    const deletedSession = { ...sessions[sessionIndex] };
+    
+    // Remove the session from the array
+    sessions.splice(sessionIndex, 1);
+
+    await this._saveFamilyData(familyId, familyData);
+
+    console.log(`✅ Redis: Session deleted for kid ${kidId}`);
+
+    // Notify parents
+    await this._notifyParents(familyId, {
+      type: "sessionDeleted",
+      kidId,
+      kidName: familyData.kids[kidId].name,
+      deletedSession,
+    });
+
+    return { success: true, sessionId, deletedSession };
+  } catch (error) {
+    console.error("❌ Redis: Error deleting session:", error);
+    throw error;
+  }
+}
+
   // Quick add: simplified interface for any session type
   async quickAdd(familyId, kidId, sessionData) {
     try {
