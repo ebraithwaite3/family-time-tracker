@@ -83,11 +83,13 @@ class RedisService {
             sessions: kid.sessions || [],
             settings: kidSettings,
           },
+          settings: {
+            availableApps: familyData.settings?.availableApps, // ✅ Move to settings level
+          },
           globalSettings: {
             notificationsEnabled: familyData.settings?.notificationsEnabled,
             warningThresholds: familyData.settings?.warningThresholds,
             autoEndSessions: familyData.settings?.autoEndSessions,
-            availableApps: familyData.settings?.availableApps,
           },
           lastUpdated: familyData.lastUpdated,
         };
