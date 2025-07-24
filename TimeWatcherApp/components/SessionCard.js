@@ -5,22 +5,25 @@ import InlineSessionEditor from './InlineSessionEditor';
 
 const SessionCard = ({
   session,
-  index, // Kept for keying if session.id is sometimes missing, though session.id is preferred.
-  theme, // Passed down from TodaysSessionsModal or parent
-  userType, // Passed down
-  userName, // Added for the editor
-  kidId, // Add kidId prop for parent mode
-  getAppInfo, // Passed down function from parent
-  handleDeletePress, // Callback for deleting, handled by parent
-  onSessionUpdated, // Callback when session is updated
+  index, 
+  theme, 
+  userType, 
+  userName, 
+  kidId, 
+  getAppInfo, 
+  handleDeletePress, 
+  onSessionUpdated, 
+  hideDeleteAndEdit = false // New prop to control visibility
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [passcodeVisible, setPasscodeVisible] = useState(false);
   const [passcode, setPasscode] = useState('');
+  const [passcodeAction, setPasscodeAction] = useState(''); // ✅ Track what action needs passcode
 
   const appInfo = getAppInfo(session.app);
   const isBonus = session.bonus;
   const isPunishment = session.punishment;
+  const isNonCounting = session.countTowardsTotal === false && !isBonus && !isPunishment; // ✅ New: detect non-counting sessions
 
   let sessionType = 'Regular Session';
   let typeIcon = appInfo.icon;
@@ -54,6 +57,7 @@ const SessionCard = ({
   const handleEditPress = () => {
     if (userType === 'kid') {
       // Kids need to enter passcode
+      setPasscodeAction('edit'); // ✅ Set action type
       setPasscodeVisible(true);
       setPasscode('');
     } else {
@@ -62,12 +66,33 @@ const SessionCard = ({
     }
   };
 
+  // ✅ Handle delete button press with passcode protection for kids
+  const handleDeleteButtonPress = () => {
+    if (userType === 'kid') {
+      // Kids need to enter passcode for delete
+      setPasscodeAction('delete');
+      setPasscodeVisible(true);
+      setPasscode('');
+    } else {
+      // Parents can delete directly
+      handleDeletePress(session);
+    }
+  };
+
   // Handle passcode submission
   const handlePasscodeSubmit = () => {
     if (passcode === 'P@rent') {
       setPasscodeVisible(false);
       setPasscode('');
-      setIsEditing(true);
+      
+      // ✅ Execute the appropriate action
+      if (passcodeAction === 'edit') {
+        setIsEditing(true);
+      } else if (passcodeAction === 'delete') {
+        handleDeletePress(session);
+      }
+      
+      setPasscodeAction(''); // ✅ Clear action
     } else {
       Alert.alert('Incorrect Passcode', 'Please ask a parent for help.');
       setPasscode('');
@@ -78,6 +103,7 @@ const SessionCard = ({
   const handlePasscodeCancel = () => {
     setPasscodeVisible(false);
     setPasscode('');
+    setPasscodeAction(''); // ✅ Clear action
   };
 
   // Handle save from inline editor
@@ -114,7 +140,7 @@ const SessionCard = ({
           </Text>
           {session.app && (
             <Text style={[styles.appName, { color: theme.text, opacity: 0.8 }]}>
-              {appInfo.name}
+              {appInfo.name}{isNonCounting ? ' 🚶' : ''} {/* ✅ Add walking icon for non-counting sessions */}
             </Text>
           )}
           {userType === 'parent' && session.kidName && (
@@ -141,7 +167,7 @@ const SessionCard = ({
 
           <View style={styles.actionButtons}>
             {/* Only show edit button if it's not a 'bonusOnly' or 'punishmentOnly' type */}
-            {!(session.bonusOnly || session.punishmentOnly) && (
+            {!(session.bonusOnly || session.punishmentOnly) && !hideDeleteAndEdit && (
               <TouchableOpacity
                 style={styles.editButton}
                 onPress={handleEditPress}
@@ -150,12 +176,14 @@ const SessionCard = ({
               </TouchableOpacity>
             )}
 
+            {!hideDeleteAndEdit && (
             <TouchableOpacity
               style={[styles.deleteButton, { backgroundColor: '#ff4444' }]}
-              onPress={() => handleDeletePress(session)}
+              onPress={handleDeleteButtonPress} // ✅ Use new handler with passcode protection
             >
               <Text style={styles.deleteButtonText}>🗑️</Text>
             </TouchableOpacity>
+            )}
           </View>
         </View>
       </View>
@@ -203,7 +231,7 @@ const SessionCard = ({
               Parent Passcode Required
             </Text>
             <Text style={[styles.passcodeMessage, { color: theme.text, opacity: 0.7 }]}>
-              Enter the parent passcode to edit this session
+              Enter the parent passcode to {passcodeAction} this session {/* ✅ Dynamic message */}
             </Text>
             
             <TextInput

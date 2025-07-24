@@ -24,6 +24,7 @@ const TodaysSessionsModal = ({
   userName, // Add userName prop
   onSessionUpdate, // Callback when session is edited
 }) => {
+    console.log("TODAY'S SESSIONS MODAL USER NAME:", userName);
   const { theme } = useTheme();
   const { familyData, refreshFamilyData } = useData();
   const [todaysSessions, setTodaysSessions] = useState([]);
@@ -146,7 +147,7 @@ const TodaysSessionsModal = ({
   const deleteSession = async (session) => {
     try {
       const familyId = 'braithwaite_family_tracker';
-      const targetKidId = userType === 'parent' ? (session.kidId || userId) : userId;
+      const targetKidId = userType === 'parent' ? (session.kidId || userId) : (userName || userId);
 
       console.log('🗑️ DELETING SESSION:', {
         sessionId: session.id,
@@ -312,7 +313,7 @@ const TodaysSessionsModal = ({
       theme={theme}
       userType={userType}
       userName={userName || userId} // Use userName or fallback to userId
-      kidId={session.kidId || userId} // Pass the kid ID for targeting
+      kidId={userType === 'parent' ? (session.kidId || userId) : userName || userId} // Pass the kid ID for targeting
       getAppInfo={getAppInfo}
       handleDeletePress={showDeleteConfirmation} // Pass delete handler
       onSessionUpdated={handleSessionUpdated} // Pass update callback

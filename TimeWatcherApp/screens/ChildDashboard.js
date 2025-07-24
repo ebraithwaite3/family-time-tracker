@@ -135,6 +135,7 @@ const ChildDashboard = ({ userName, onLogout }) => {
     const commonProps = {
       userName,
       onLogout,
+      userType: 'kid', // Assuming this is a child dashboard
     };
 
     switch (activeTab) {

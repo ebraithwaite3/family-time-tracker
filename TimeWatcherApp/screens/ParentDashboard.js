@@ -68,6 +68,7 @@ const ParentDashboard = ({ userName, onLogout }) => {
   const renderActiveTab = () => {
     const tabProps = {
       userName,
+      userType: 'parent',
       selectedKid,
       onKidChange: setSelectedKid,
       onLogout

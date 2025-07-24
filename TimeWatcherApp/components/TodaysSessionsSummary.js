@@ -144,6 +144,7 @@ const TodaysSessionsSummary = ({ userType, userId }) => {
         onClose={() => setModalVisible(false)}
         userType={userType}
         userId={userId}
+        userName={familyData?.myData?.name || userId} // Use myData name or fallback to userId
         onSessionUpdate={handleSessionUpdate}
       />
     </>

@@ -20,6 +20,7 @@ import PunishmentModal from '../modals/PunishmentModal';
 const EditTab = ({ userName, selectedKid, onKidChange, userType }) => {
   const { theme } = useTheme();
   const { familyData } = useData();
+  console.log("USER TYPE EDIT TAB:", userType);
 
   // Modal visibility states
   const [activeModal, setActiveModal] = useState(null);

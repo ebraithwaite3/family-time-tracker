@@ -63,15 +63,30 @@ const QuickAddModal = ({ visible, onClose, userName, selectedKid, userType }) =>
   };
 
   // Get devices for selected kid
+  // Get devices for selected kid
   const getDevicesForKid = () => {
+    console.log('🔍 QuickAdd - Getting devices for userType:', userType);
+    console.log('🔍 QuickAdd - familyData structure:', Object.keys(familyData || {}));
+    
     if (userType === 'parent' && selectedKid) {
       const devices = familyData?.kidsData?.[selectedKid]?.devices || [];
+      console.log('🔍 QuickAdd - Parent mode - kid devices:', devices);
       return devices.map(device => ({
         label: device.deviceName || device.deviceId,
         value: device.deviceId,
       }));
     } else if (userType === 'kid') {
-      const devices = familyData?.myData?.devices || [];
+      // Try multiple possible locations for kid devices
+      let devices = familyData?.myData?.devices || [];
+      console.log('🔍 QuickAdd - Kid mode - myData devices:', devices);
+      
+      // If not found in myData, try looking in the raw structure
+      if (devices.length === 0 && userName) {
+        devices = familyData?.kids?.[userName]?.devices || 
+                 familyData?.kidsData?.[userName]?.devices || [];
+      }
+      
+      console.log('🔍 QuickAdd - Kid mode - devices found:', devices);
       return devices.map(device => ({
         label: device.deviceName || device.deviceId,
         value: device.deviceId,
