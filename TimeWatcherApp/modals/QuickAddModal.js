@@ -5,7 +5,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  TextInput,
   Alert,
   Switch,
   KeyboardAvoidingView,
@@ -16,24 +15,40 @@ import {
 import { useTheme } from '../context/ThemeContext';
 import { useData } from '../context/DataContext';
 import CustomDropdown from '../components/CustomDropdown';
+import CustomTimePicker from '../components/CustomTimePicker';
 import uuid from 'react-native-uuid';
 import apiService from '../services/apiService';
+import { DateTime } from 'luxon';
 
 const QuickAddModal = ({ visible, onClose, userName, selectedKid, userType }) => {
   const { theme } = useTheme();
   const { familyData, getRemainingTime, refreshFamilyData } = useData();
 
   const [formData, setFormData] = useState({
-    duration: '',
+    startTime: null,
+    endTime: null,
     app: '',
     device: '',
     countTowardsTotal: true,
-});
+  });
 
   // Get today's date
   const getTodayDate = () => {
-    const today = new Date();
-    return today.toISOString().split('T')[0];
+    // DateTime.local() gets the current time in the system's local timezone.
+    // .toISODate() formats it as 'YYYY-MM-DD'.
+    const today = DateTime.local().toISODate();
+    return today;
+  };
+
+  // Calculate duration from start and end times
+  const calculateDuration = () => {
+    if (formData.startTime && formData.endTime) {
+      const startTime = DateTime.fromJSDate(formData.startTime);
+      const endTime = DateTime.fromJSDate(formData.endTime);
+      const diffMinutes = Math.round(endTime.diff(startTime, 'minutes').minutes);
+      return diffMinutes > 0 ? diffMinutes : 0;
+    }
+    return 0;
   };
 
   // Get available apps
@@ -80,15 +95,11 @@ const QuickAddModal = ({ visible, onClose, userName, selectedKid, userType }) =>
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  // Quick time selection
-  const selectQuickTime = (minutes) => {
-    updateFormField('duration', minutes.toString());
-  };
-
   // Clear form
   const clearForm = () => {
     setFormData({
-      duration: '',
+      startTime: null,
+      endTime: null,
       app: '',
       device: '',
       countTowardsTotal: true,
@@ -103,15 +114,19 @@ const QuickAddModal = ({ visible, onClose, userName, selectedKid, userType }) =>
 
   // Validation
   const validateForm = () => {
-    const { duration, app, device } = formData;
+    const { startTime, endTime, app, device } = formData;
     
     if (!app) return 'Please select an app';
     if (!device) return 'Please select a device';
-    if (!duration || parseInt(duration) < 1) return 'Duration must be at least 1 minute';
+    if (!startTime) return 'Please select a start time';
+    if (!endTime) return 'Please select an end time';
+    
+    const duration = calculateDuration();
+    if (duration <= 0) return 'End time must be after start time';
     
     const remainingTime = getRemainingTimeForValidation();
-    if (parseInt(duration) > remainingTime) {
-      return `Duration exceeds remaining daily time (${remainingTime} minutes left)`;
+    if (formData.countTowardsTotal && duration > remainingTime) {
+      return `Duration (${duration} min) exceeds remaining daily time (${remainingTime} min)`;
     }
     
     return null;
@@ -126,26 +141,27 @@ const QuickAddModal = ({ visible, onClose, userName, selectedKid, userType }) =>
     }
   
     try {
+      const duration = calculateDuration();
+      
       const sessionData = {
         id: uuid.v4(),
         date: getTodayDate(),
-        duration: parseInt(formData.duration),
+        timeStarted: DateTime.fromJSDate(formData.startTime).toISO(),
+        timeEnded: DateTime.fromJSDate(formData.endTime).toISO(),
+        duration: duration,
         app: formData.app,
         device: formData.device,
         countTowardsTotal: formData.countTowardsTotal,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        createdAt: DateTime.local().toISO(),
+        updatedAt: DateTime.local().toISO(),
         updatedBy: userName,
       };
   
       // Determine the target kid ID
-      const targetKidId = userType === 'parent' ? selectedKid : userName; // Use userName for kids
-      const familyId = 'braithwaite_family_tracker'; // Your family ID
+      const targetKidId = userType === 'parent' ? selectedKid : userName;
+      const familyId = 'braithwaite_family_tracker';
       
-      console.log('📤 SAVING TO BACKEND:');
-      console.log('Family ID:', familyId);
-      console.log('Target Kid ID:', targetKidId);
-      console.log('Session Data:', sessionData);
+      console.log('📤 SAVING SESSION TO BACKEND:', sessionData);
   
       // Use your existing API service
       const result = await apiService.addSession(familyId, targetKidId, sessionData);
@@ -154,7 +170,13 @@ const QuickAddModal = ({ visible, onClose, userName, selectedKid, userType }) =>
       // Update local family data
       refreshFamilyData();
       
-      Alert.alert('Success', 'Session added successfully!');
+      const startTimeStr = DateTime.fromJSDate(formData.startTime).toLocaleString(DateTime.TIME_SIMPLE);
+      const endTimeStr = DateTime.fromJSDate(formData.endTime).toLocaleString(DateTime.TIME_SIMPLE);
+      
+      Alert.alert(
+        'Session Added! ✅', 
+        `${duration} minute session added\n${startTimeStr} - ${endTimeStr}`
+      );
       handleClose();
     } catch (error) {
       console.error('❌ SAVE ERROR:', error);
@@ -162,40 +184,10 @@ const QuickAddModal = ({ visible, onClose, userName, selectedKid, userType }) =>
     }
   };
 
-  // Render quick time buttons
-  const renderQuickTimeButtons = () => (
-    <View style={styles.quickTimeContainer}>
-      {[15, 30, 45, 60].map(minutes => (
-        <TouchableOpacity
-          key={minutes}
-          style={[
-            styles.quickTimeButton,
-            {
-              backgroundColor: formData.duration === minutes.toString() 
-                ? theme.buttonBackground 
-                : theme.background,
-              borderColor: theme.isDark ? '#444' : '#ddd',
-            }
-          ]}
-          onPress={() => selectQuickTime(minutes)}
-        >
-          <Text style={[
-            styles.quickTimeText,
-            { 
-              color: formData.duration === minutes.toString() 
-                ? theme.buttonText 
-                : theme.text 
-            }
-          ]}>
-            {minutes}m
-          </Text>
-        </TouchableOpacity>
-      ))}
-    </View>
-  );
-
   const availableApps = getAvailableApps();
   const availableDevices = getDevicesForKid();
+  const duration = calculateDuration();
+  const remainingTime = getRemainingTimeForValidation();
 
   return (
     <Modal
@@ -210,19 +202,15 @@ const QuickAddModal = ({ visible, onClose, userName, selectedKid, userType }) =>
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
           {/* Header */}
-          <View style={[styles.header, { backgroundColor: theme.headerBackground }]}>
+          <View style={[styles.header, { backgroundColor: theme.background }]}>
             <Text style={[styles.headerTitle, { color: theme.text }]}>Quick Add Session</Text>
             <TouchableOpacity onPress={handleClose} style={styles.headerCloseX}>
-                <Text style={[styles.headerCloseXText, { color: theme.text }]}>x</Text>
+              <Text style={[styles.headerCloseXText, { color: theme.text }]}>✕</Text>
             </TouchableOpacity>
-        </View>
-
-
+          </View>
 
           {/* Content */}
           <View style={styles.content}>
-            
-
             {/* Device Selection */}
             {availableDevices.length > 0 && (
               <View style={styles.fieldContainer}>
@@ -251,29 +239,31 @@ const QuickAddModal = ({ visible, onClose, userName, selectedKid, userType }) =>
               </View>
             )}
 
-            {/* Duration */}
-            <View style={styles.fieldContainer}>
-              <Text style={[styles.fieldLabel, { color: theme.text }]}>⏱️ Duration</Text>
-              {renderQuickTimeButtons()}
-              <TextInput
-                style={[
-                  styles.customInput,
-                  {
-                    backgroundColor: theme.menuBackground,
-                    color: theme.text,
-                    borderColor: theme.isDark ? '#444' : '#ddd',
-                  }
-                ]}
-                value={formData.duration}
-                onChangeText={(value) => updateFormField('duration', value)}
-                placeholder="Custom minutes"
-                placeholderTextColor={theme.isDark ? '#888' : '#666'}
-                keyboardType="numeric"
-                returnKeyType="done"
-                onSubmitEditing={Keyboard.dismiss}
-                blurOnSubmit={true}
+            {/* Time Selection */}
+            <View style={styles.timeContainer}>
+              <CustomTimePicker
+                label="⏰ Start Time"
+                value={formData.startTime}
+                onTimeChange={(time) => updateFormField('startTime', time)}
+                placeholder="When did it start?"
+              />
+              
+              <CustomTimePicker
+                label="⏹️ End Time"
+                value={formData.endTime}
+                onTimeChange={(time) => updateFormField('endTime', time)}
+                placeholder="When did it end?"
               />
             </View>
+
+            {/* Duration Display */}
+            {duration > 0 && (
+              <View style={[styles.durationContainer, { backgroundColor: theme.isDark ? '#1A3A1A' : 'rgba(76, 175, 80, 0.1)' }]}>
+                <Text style={[styles.durationText, { color: '#4CAF50' }]}>
+                  📊 Session Duration: {duration} minutes
+                </Text>
+              </View>
+            )}
 
             {/* Counts Toward Total - Only show for parents, or kids with Pokemon Go */}
             {(userType === 'parent' || (userType === 'kid' && formData.app === 'pokemonGo')) && (
@@ -293,30 +283,35 @@ const QuickAddModal = ({ visible, onClose, userName, selectedKid, userType }) =>
             {/* Remaining Time Info */}
             <View style={[styles.infoContainer, { backgroundColor: theme.isDark ? '#1A3A1A' : 'rgba(76, 175, 80, 0.1)' }]}>
               <Text style={[styles.infoText, { color: theme.text }]}>
-                📊 Remaining time today: {getRemainingTimeForValidation()} minutes
+                📊 Remaining time today: {remainingTime} minutes
               </Text>
+              {formData.countTowardsTotal && duration > 0 && (
+                <Text style={[styles.infoText, { color: theme.text, marginTop: 4 }]}>
+                  After this session: {Math.max(0, remainingTime - duration)} minutes remaining
+                </Text>
+              )}
             </View>
+          </View>
 
-            {/* Action Buttons Row */}
-            <View style={styles.actionButtonsContainer}>
-              <TouchableOpacity
-                style={[styles.cancelButtonNew, { borderColor: theme.text }]}
-                onPress={handleClose}
-              >
-                <Text style={[styles.cancelButtonTextNew, { color: theme.text }]}>
-                  Cancel
-                </Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[styles.submitButtonNew, { backgroundColor: theme.buttonBackground }]}
-                onPress={handleSubmit}
-              >
-                <Text style={[styles.submitButtonTextNew, { color: theme.buttonText }]}>
-                  Add Session
-                </Text>
-              </TouchableOpacity>
-            </View>
+          {/* Action Buttons Row */}
+          <View style={styles.actionButtonsContainer}>
+            <TouchableOpacity
+              style={[styles.cancelButtonNew, { borderColor: theme.text }]}
+              onPress={handleClose}
+            >
+              <Text style={[styles.cancelButtonTextNew, { color: theme.text }]}>
+                Cancel
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[styles.submitButtonNew, { backgroundColor: theme.buttonBackground }]}
+              onPress={handleSubmit}
+            >
+              <Text style={[styles.submitButtonTextNew, { color: theme.buttonText }]}>
+                Add Session
+              </Text>
+            </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
       </TouchableWithoutFeedback>
@@ -338,58 +333,46 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0,0,0,0.1)',
   },
-  closeButton: {
-    width: 30,
-    height: 30,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  closeButtonText: {
-    fontSize: 18,
-    fontWeight: '300',
-  },
-  headerSpacer: {
-    width: 30, // Same width as close button for centering
-  },
   headerTitle: {
     fontSize: 20,
+    fontWeight: 'bold',
+    flex: 1,
+    textAlign: 'center',
+  },
+  headerCloseX: {
+    position: 'absolute',
+    right: 20,
+    top: 20,
+    width: 30,
+    height: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerCloseXText: {
+    fontSize: 22,
     fontWeight: 'bold',
   },
   content: {
     flex: 1,
     padding: 20,
-    paddingTop: 10, // Reduced padding at top
   },
   fieldContainer: {
     marginBottom: 24,
   },
-  fieldLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 12,
+  timeContainer: {
+    marginBottom: 16,
   },
-  quickTimeContainer: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 12,
-  },
-  quickTimeButton: {
-    flex: 1,
-    paddingVertical: 12,
+  durationContainer: {
+    padding: 12,
     borderRadius: 8,
     borderWidth: 1,
+    borderColor: 'rgba(76, 175, 80, 0.3)',
+    marginBottom: 16,
   },
-  quickTimeText: {
+  durationText: {
+    fontSize: 16,
+    fontWeight: 'bold',
     textAlign: 'center',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  customInput: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    fontSize: 16,
   },
   switchContainer: {
     flexDirection: 'row',
@@ -413,26 +396,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
   },
-  headerCloseX: {
-    position: 'absolute',
-    right: 20,
-    top: 20,
-    width: 30,
-    height: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerCloseXText: {
-    fontSize: 22,
-    fontWeight: 'bold',
-  },
   actionButtonsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginTop: 30,
     gap: 10,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
   },
-  
   cancelButtonNew: {
     flex: 1,
     paddingVertical: 14,
@@ -440,24 +411,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'center',
   },
-  
   submitButtonNew: {
     flex: 1,
     paddingVertical: 14,
     borderRadius: 10,
     alignItems: 'center',
   },
-  
   submitButtonTextNew: {
     fontSize: 16,
     fontWeight: 'bold',
   },
-  
   cancelButtonTextNew: {
     fontSize: 16,
     fontWeight: '600',
   },
-  
 });
 
 export default QuickAddModal;

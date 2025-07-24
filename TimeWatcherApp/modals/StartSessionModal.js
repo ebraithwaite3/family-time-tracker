@@ -1,3 +1,4 @@
+// src/components/StartSessionModal.js
 import React, { useState } from 'react';
 import {
   Modal,
@@ -18,6 +19,7 @@ import { useData } from '../context/DataContext';
 import CustomDropdown from '../components/CustomDropdown';
 import apiService from '../services/apiService';
 import uuid from 'react-native-uuid';
+import { DateTime } from 'luxon'; // Import DateTime from Luxon
 
 const StartSessionModal = ({ visible, onClose, userName, selectedKid, userType }) => {
   const { theme } = useTheme();
@@ -30,10 +32,11 @@ const StartSessionModal = ({ visible, onClose, userName, selectedKid, userType }
     countTowardsTotal: true,
   });
 
-  // Get today's date
+  // Get today's date in YYYY-MM-DD format based on local time zone using Luxon
   const getTodayDate = () => {
-    const today = new Date();
-    return today.toISOString().split('T')[0];
+    // DateTime.local() creates a DateTime object in the user's local time zone.
+    // .toISODate() formats it as 'YYYY-MM-DD'.
+    return DateTime.local().toISODate();
   };
 
   // Get available apps
@@ -104,15 +107,15 @@ const StartSessionModal = ({ visible, onClose, userName, selectedKid, userType }
   // Validation
   const validateForm = () => {
     const { app, device } = formData;
-
+    
     if (!app) return 'Please select an app';
     if (!device) return 'Please select a device';
-
+    
     const remainingTime = getRemainingTimeForValidation();
     if (formData.countTowardsTotal && remainingTime <= 0) {
       return 'No remaining screen time available today';
     }
-
+    
     return null;
   };
 
@@ -127,19 +130,25 @@ const StartSessionModal = ({ visible, onClose, userName, selectedKid, userType }
     try {
       const targetKidId = userType === 'parent' ? selectedKid : userName;
       const familyId = 'braithwaite_family_tracker';
-
+      
+      const now = DateTime.local(); // Current time in local timezone
       const sessionData = {
         id: uuid.v4(),
         date: getTodayDate(),
-        timeStarted: new Date().toISOString(), // Start time in UTC
+        timeStarted: now.toISO(), // Store start time as ISO (UTC) string from local time
         app: formData.app,
         device: formData.device,
         countTowardsTotal: formData.countTowardsTotal,
         active: true, // Mark as active session
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        createdAt: now.toISO(),
+        updatedAt: now.toISO(),
         updatedBy: userName,
       };
+
+      // Add estimated duration if provided
+      if (formData.estimatedDuration) {
+        sessionData.estimatedDuration = parseInt(formData.estimatedDuration);
+      }
 
       console.log('📤 STARTING SESSION:', sessionData);
 
@@ -157,15 +166,11 @@ const StartSessionModal = ({ visible, onClose, userName, selectedKid, userType }
       // Calculate estimated finish time and remaining time
       const estimatedDuration = parseInt(formData.estimatedDuration) || 0;
       let finishTimeMessage = '';
-
+      
       if (estimatedDuration > 0) {
-        const finishTime = new Date();
-        finishTime.setMinutes(finishTime.getMinutes() + estimatedDuration);
-        const finishTimeString = finishTime.toLocaleTimeString([], {
-          hour: '2-digit',
-          minute: '2-digit'
-        });
-
+        const finishTime = now.plus({ minutes: estimatedDuration }); // Use Luxon's now object
+        const finishTimeString = finishTime.toLocaleString(DateTime.TIME_24_SIMPLE); // Format in local time
+        
         if (formData.countTowardsTotal) {
           const timeAfterSession = Math.max(0, remainingTime - estimatedDuration);
           finishTimeMessage = `\n\nEstimated ${estimatedDuration} minute session.\nPlan to finish by ${finishTimeString}.\nYou'll have ${timeAfterSession} minutes remaining after this session.`;
@@ -177,7 +182,7 @@ const StartSessionModal = ({ visible, onClose, userName, selectedKid, userType }
       }
 
       Alert.alert(
-        'Session Started! ▶️',
+        'Session Started! ▶️', 
         `${appName} session started on ${formData.device}${finishTimeMessage}`
       );
       handleClose();
@@ -196,8 +201,8 @@ const StartSessionModal = ({ visible, onClose, userName, selectedKid, userType }
           style={[
             styles.quickTimeButton,
             {
-              backgroundColor: formData.estimatedDuration === minutes.toString()
-                ? theme.buttonBackground
+              backgroundColor: formData.estimatedDuration === minutes.toString() 
+                ? theme.buttonBackground 
                 : theme.background,
               borderColor: theme.isDark ? '#444' : '#ddd',
             }
@@ -206,10 +211,10 @@ const StartSessionModal = ({ visible, onClose, userName, selectedKid, userType }
         >
           <Text style={[
             styles.quickTimeText,
-            {
-              color: formData.estimatedDuration === minutes.toString()
-                ? theme.buttonText
-                : theme.text
+            { 
+              color: formData.estimatedDuration === minutes.toString() 
+                ? theme.buttonText 
+                : theme.text 
             }
           ]}>
             {minutes}m
@@ -231,7 +236,7 @@ const StartSessionModal = ({ visible, onClose, userName, selectedKid, userType }
       onRequestClose={handleClose}
     >
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <KeyboardAvoidingView
+        <KeyboardAvoidingView 
           style={[styles.container, { backgroundColor: theme.background }]}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
@@ -299,7 +304,7 @@ const StartSessionModal = ({ visible, onClose, userName, selectedKid, userType }
               />
             </View>
 
-            {/* Counts Toward Total - Only show for parents, or kids with Pokemon Go */}
+            {/* Counts Toward Total */}
             {(userType === 'parent' || (userType === 'kid' && formData.app === 'pokemonGo')) && (
               <View style={[styles.switchContainer, { backgroundColor: theme.menuBackground }]}>
                 <Text style={[styles.switchLabel, { color: theme.text }]}>
@@ -351,7 +356,7 @@ const StartSessionModal = ({ visible, onClose, userName, selectedKid, userType }
                 Cancel
               </Text>
             </TouchableOpacity>
-
+            
             <TouchableOpacity
               style={[styles.submitButtonNew, { backgroundColor: '#4CAF50' }]}
               onPress={handleSubmit}

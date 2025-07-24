@@ -9,50 +9,85 @@ import {
 import { useTheme } from '../context/ThemeContext';
 import { useData } from '../context/DataContext';
 import TodaysSessionsModal from './TodaysSessionsModal';
+import { DateTime } from 'luxon';
 
 const TodaysSessionsSummary = ({ userType, userId }) => {
   const { theme } = useTheme();
   const { familyData } = useData();
   const [modalVisible, setModalVisible] = useState(false);
 
-  // Get today's date in YYYY-MM-DD format
   const getTodayDate = () => {
-    const today = new Date();
-    return today.toISOString().split('T')[0];
+    // DateTime.local() gets the current time in the system's local timezone.
+    // .toISODate() formats it as 'YYYY-MM-DD'.
+    const today = DateTime.local().toISODate();
+    return today;
   };
+  console.log("Today's date:", getTodayDate());
 
   // Count today's sessions for the selected kid
-  const getTodaysSessionCount = () => {
+  const getTodaysSessionCounts = () => {
     const today = getTodayDate();
-    let sessionCount = 0;
+    let regularCount = 0;
+    let bonusCount = 0;
+    let punishmentCount = 0;
 
     if (userType === 'parent' && userId) {
       // Parents viewing a specific kid's sessions
       const kidData = familyData?.kidsData?.[userId];
       if (kidData && kidData.sessions) {
-        sessionCount = kidData.sessions.filter(session => session.date === today).length;
+        const todaySessions = kidData.sessions.filter(session => session.date === today);
+        
+        todaySessions.forEach(session => {
+          if (session.bonus) {
+            bonusCount++;
+          } else if (session.punishment) {
+            punishmentCount++;
+          } else {
+            regularCount++;
+          }
+        });
       }
     } else if (userType === 'parent') {
       // Parents viewing all kids' sessions (fallback)
       if (familyData?.kidsData) {
         Object.values(familyData.kidsData).forEach(kid => {
           const todaySessions = (kid.sessions || []).filter(session => session.date === today);
-          sessionCount += todaySessions.length;
+          
+          todaySessions.forEach(session => {
+            if (session.bonus) {
+              bonusCount++;
+            } else if (session.punishment) {
+              punishmentCount++;
+            } else {
+              regularCount++;
+            }
+          });
         });
       }
     } else {
       // Kids only see their own sessions
       const myData = familyData?.myData;
       if (myData && myData.sessions) {
-        sessionCount = myData.sessions.filter(session => session.date === today).length;
+        const todaySessions = myData.sessions.filter(session => session.date === today);
+        
+        todaySessions.forEach(session => {
+          if (session.bonus) {
+            bonusCount++;
+          } else if (session.punishment) {
+            punishmentCount++;
+          } else {
+            regularCount++;
+          }
+        });
       }
     }
 
-    return sessionCount;
+    return { regularCount, bonusCount, punishmentCount };
   };
 
-  // Get session count - this will recalculate when userId changes
-  const sessionCount = getTodaysSessionCount();
+  // Get session counts - this will recalculate when userId changes
+  const { regularCount, bonusCount, punishmentCount } = getTodaysSessionCounts();
+  const totalCount = regularCount + bonusCount + punishmentCount;
 
   const handleSessionUpdate = () => {
     // Force re-render after session updates
@@ -72,16 +107,32 @@ const TodaysSessionsSummary = ({ userType, userId }) => {
             Today's Sessions
           </Text>
           <Text style={[styles.count, { color: theme.text }]}>
-            {sessionCount}
+            {regularCount}
           </Text>
           
-          {sessionCount > 0 && (
+          {/* Bonus and Punishment counts */}
+          {(bonusCount > 0 || punishmentCount > 0) && (
+            <View style={styles.extraCounts}>
+              {bonusCount > 0 && (
+                <Text style={[styles.extraText, { color: '#4CAF50' }]}>
+                  🎁 Bonus: {bonusCount}
+                </Text>
+              )}
+              {punishmentCount > 0 && (
+                <Text style={[styles.extraText, { color: '#F44336' }]}>
+                  ⚠️ Punishments: {punishmentCount}
+                </Text>
+              )}
+            </View>
+          )}
+          
+          {totalCount > 0 && (
             <TouchableOpacity
               style={[styles.viewButton, { backgroundColor: theme.buttonBackground }]}
               onPress={() => setModalVisible(true)}
             >
               <Text style={[styles.viewButtonText, { color: theme.buttonText }]}>
-                View Sessions
+                View All Sessions
               </Text>
             </TouchableOpacity>
           )}
@@ -134,6 +185,17 @@ const styles = StyleSheet.create({
     fontSize: 16, // Larger text
     fontWeight: '600',
     textAlign: 'center',
+  },
+  extraCounts: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 12,
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+  },
+  extraText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
 });
 

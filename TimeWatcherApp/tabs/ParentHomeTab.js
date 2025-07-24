@@ -4,6 +4,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useData } from '../context/DataContext';
 import CustomDropdown from '../components/CustomDropdown';
 import TodaysSessionsSummary from '../components/TodaysSessionsSummary';
+import ActiveSessionBanner from '../components/ActiveSessionBanner'; // ← Add this import
 import { DateTime } from 'luxon';
 
 const ParentHomeTab = ({ userName, selectedKid, onKidChange }) => {
@@ -16,19 +17,42 @@ const ParentHomeTab = ({ userName, selectedKid, onKidChange }) => {
     getTodaysSessions,
     calculateUsedTime,
     getCurrentLimits,
+    getEffectiveDailyLimit, // ← Added this
     getRemainingTime,
     getUsagePercentage,
     isInBedtime
   } = useData();
+
+  // Helper function to get punishment total for today
+  const getPunishmentTotal = (kidId) => {
+    const today = todaysDate.toFormat('yyyy-MM-dd');
+    let punishmentTotal = 0;
+
+    if (kidId) {
+      const kidData = familyData?.kidsData?.[kidId];
+      if (kidData && kidData.sessions) {
+        const todaySessions = kidData.sessions.filter(session => session.date === today);
+        punishmentTotal = todaySessions
+          .filter(session => session.punishment)
+          .reduce((total, session) => total + (session.duration || 0), 0);
+      }
+    }
+
+    return punishmentTotal;
+  };
 
   // Get data for selected kid
   const selectedKidData = selectedKid ? familyData?.kidsData?.[selectedKid] : null;
   const selectedKidSessions = getTodaysSessions(selectedKid);
   const selectedKidUsedTime = calculateUsedTime(selectedKid);
   const selectedKidLimits = getCurrentLimits(selectedKid);
+  const selectedKidEffectiveLimit = getEffectiveDailyLimit(selectedKid); // ← Added this
+  const selectedKidPunishmentTotal = getPunishmentTotal(selectedKid); // ← Added this
   const selectedKidRemainingTime = getRemainingTime(selectedKid);
   const selectedKidUsagePercentage = getUsagePercentage(selectedKid);
   const selectedKidInBedtime = isInBedtime(selectedKid);
+  console.log("Used Time:", selectedKidUsedTime);
+  console.log("Effective Daily Limit:", selectedKidEffectiveLimit);
 
   // Determine if it's weekend
   const isWeekend = todaysDate.weekday >= 6;
@@ -54,10 +78,12 @@ const ParentHomeTab = ({ userName, selectedKid, onKidChange }) => {
       console.log('👦 Selected Kid Data:', selectedKidData);
       console.log('📅 Sessions Today:', selectedKidSessions.length);
       console.log('⏱️ Used Time:', selectedKidUsedTime, 'minutes');
+      console.log('📊 Base Daily Limit:', selectedKidLimits?.dailyTotal || 'N/A', 'minutes');
+      console.log('📊 Effective Daily Limit:', selectedKidEffectiveLimit, 'minutes');
       console.log('⏳ Remaining Time:', selectedKidRemainingTime, 'minutes');
       console.log('📈 Usage Percentage:', Math.round(selectedKidUsagePercentage), '%');
     }
-  }, [selectedKid, selectedKidData, selectedKidSessions, selectedKidUsedTime, selectedKidRemainingTime, selectedKidUsagePercentage, scheduleType]);
+  }, [selectedKid, selectedKidData, selectedKidSessions, selectedKidUsedTime, selectedKidLimits, selectedKidEffectiveLimit, selectedKidRemainingTime, selectedKidUsagePercentage, scheduleType]);
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -104,6 +130,13 @@ const ParentHomeTab = ({ userName, selectedKid, onKidChange }) => {
             {/* Quick Stats Cards */}
             {selectedKid && selectedKidData && (
               <>
+                {/* Active Session Banner */}
+                <ActiveSessionBanner 
+                  userType="parent"
+                  selectedKid={selectedKid}
+                  userName={userName}
+                />
+
                 {/* Main Stats Card */}
                 <View style={[styles.statsCard, { backgroundColor: theme.menuBackground }]}>
                   <Text style={[styles.cardTitle, { color: theme.text }]}>
@@ -113,9 +146,16 @@ const ParentHomeTab = ({ userName, selectedKid, onKidChange }) => {
                   <View style={styles.statsRow}>
                     <View style={styles.statItem}>
                       <Text style={[styles.statValue, { color: theme.text }]}>
-                        {selectedKidLimits?.dailyTotal || 'N/A'}
+                        {selectedKidEffectiveLimit || 'N/A'}
                       </Text>
-                      <Text style={[styles.statLabel, { color: theme.text }]}>Daily Limit</Text>
+                      <Text style={[styles.statLabel, { color: theme.text }]}>
+                        Daily Limit{selectedKidLimits?.dailyTotal !== selectedKidEffectiveLimit ? '*' : ''}
+                      </Text>
+                      {selectedKidLimits?.dailyTotal !== selectedKidEffectiveLimit && (
+                        <Text style={[styles.bonusLabel, { color: '#4CAF50' }]}>
+                          +{selectedKidEffectiveLimit - (selectedKidLimits?.dailyTotal || 0)} bonus
+                        </Text>
+                      )}
                     </View>
                     
                     <View style={styles.statItem}>
@@ -123,6 +163,11 @@ const ParentHomeTab = ({ userName, selectedKid, onKidChange }) => {
                         {selectedKidUsedTime}
                       </Text>
                       <Text style={[styles.statLabel, { color: theme.text }]}>Used</Text>
+                      {selectedKidPunishmentTotal > 0 && (
+                        <Text style={[styles.punishmentLabel, { color: '#F44336' }]}>
+                          +{selectedKidPunishmentTotal} punishment
+                        </Text>
+                      )}
                     </View>
                     
                     <View style={styles.statItem}>
@@ -183,7 +228,7 @@ const ParentHomeTab = ({ userName, selectedKid, onKidChange }) => {
                   </Text>
                   {Object.entries(familyData.kidsData).map(([kidId, kidData]) => {
                     const kidUsedTime = calculateUsedTime(kidId);
-                    const kidLimits = getCurrentLimits(kidId);
+                    const kidEffectiveLimit = getEffectiveDailyLimit(kidId); // ← Changed this
                     const kidUsage = getUsagePercentage(kidId);
                     const isSelected = kidId === selectedKid;
                     
@@ -205,7 +250,7 @@ const ParentHomeTab = ({ userName, selectedKid, onKidChange }) => {
                           styles.kidStats, 
                           { color: isSelected ? theme.buttonText : theme.text }
                         ]}>
-                          {kidUsedTime}/{kidLimits?.dailyTotal || 0}min ({Math.round(kidUsage)}%)
+                          {kidUsedTime}/{kidEffectiveLimit || 0}min ({Math.round(kidUsage)}%)
                         </Text>
                       </View>
                     );
@@ -275,6 +320,16 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 12,
     marginTop: 4,
+  },
+  bonusLabel: {
+    fontSize: 10,
+    marginTop: 2,
+    fontWeight: '600',
+  },
+  punishmentLabel: {
+    fontSize: 10,
+    marginTop: 2,
+    fontWeight: '600',
   },
   progressContainer: {
     height: 8,

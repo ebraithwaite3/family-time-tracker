@@ -13,12 +13,15 @@ import {
 import { useTheme } from '../context/ThemeContext';
 import { useData } from '../context/DataContext';
 import apiService from '../services/apiService';
+import SessionCard from './SessionCard';
+import { DateTime } from 'luxon';
 
 const TodaysSessionsModal = ({
   visible,
   onClose,
   userType, // 'parent' or 'kid'
   userId,
+  userName, // Add userName prop
   onSessionUpdate, // Callback when session is edited
 }) => {
   const { theme } = useTheme();
@@ -32,8 +35,10 @@ const TodaysSessionsModal = ({
 
   // Get today's date in YYYY-MM-DD format
   const getTodayDate = () => {
-    const today = new Date();
-    return today.toISOString().split('T')[0];
+    // DateTime.local() gets the current time in the system's local timezone.
+    // .toISODate() formats it as 'YYYY-MM-DD'.
+    const today = DateTime.local().toISODate();
+    return today;
   };
 
   useEffect(() => {
@@ -115,32 +120,6 @@ const TodaysSessionsModal = ({
     };
   };
 
-  const handleEditPress = (session) => {
-    if (userType === 'kid') {
-      // Kids need to enter passcode
-      setEditingSession(session);
-      setPasscodeAction('edit');
-      setPasscodeVisible(true);
-      setPasscode('');
-    } else {
-      // Parents can edit directly
-      handleSessionEdit(session);
-    }
-  };
-
-  const handleDeletePress = (session) => {
-    if (userType === 'kid') {
-      // Kids need to enter passcode
-      setDeletingSession(session);
-      setPasscodeAction('delete');
-      setPasscodeVisible(true);
-      setPasscode('');
-    } else {
-      // Parents get confirmation dialog
-      showDeleteConfirmation(session);
-    }
-  };
-
   const showDeleteConfirmation = (session) => {
     const appInfo = getAppInfo(session.app);
     const sessionDesc = session.bonus ? 'bonus session' : 
@@ -183,6 +162,8 @@ const TodaysSessionsModal = ({
       // Refresh data
       refreshFamilyData();
 
+      loadTodaysSessions();
+
       const appInfo = getAppInfo(session.app);
       const sessionDesc = session.bonus ? 'bonus session' : 
                          session.punishment ? 'punishment' : 
@@ -198,7 +179,6 @@ const TodaysSessionsModal = ({
               if (onSessionUpdate) {
                 onSessionUpdate();
               }
-              loadTodaysSessions();
             },
           },
         ]
@@ -315,98 +295,30 @@ const TodaysSessionsModal = ({
     }
   };
 
-  const renderSession = (session, index) => {
-    const appInfo = getAppInfo(session.app);
-    const isBonus = session.bonus;
-    const isPunishment = session.punishment;
-    
-    let sessionType = 'Regular Session';
-    let typeColor = theme.text;
-    let typeIcon = appInfo.icon;
-    
-    if (isBonus) {
-      sessionType = 'Bonus Time';
-      typeColor = '#4CAF50';
-      typeIcon = '🎁';
-    } else if (isPunishment) {
-      sessionType = 'Punishment';
-      typeColor = '#F44336';
-      typeIcon = '⚠️';
+  // Handle session updated callback from inline editor
+  const handleSessionUpdated = () => {
+    refreshFamilyData();
+    loadTodaysSessions();
+    if (onSessionUpdate) {
+      onSessionUpdate();
     }
-
-    return (
-      <View key={session.id || index} style={[
-        styles.sessionCard,
-        { 
-          backgroundColor: theme.isDark ? '#2A2A2A' : 'rgba(255,255,255,0.9)',
-          borderLeftWidth: 3,
-          borderLeftColor: isBonus ? '#4CAF50' : isPunishment ? '#F44336' : theme.buttonBackground,
-        }
-      ]}>
-        <View style={styles.sessionHeader}>
-          <View style={styles.sessionInfo}>
-            <Text style={[styles.sessionTitle, { color: theme.text }]}>
-              {typeIcon} {sessionType}
-            </Text>
-            {session.app && (
-              <Text style={[styles.appName, { color: theme.text, opacity: 0.8 }]}>
-                {appInfo.name}
-              </Text>
-            )}
-            {userType === 'parent' && session.kidName && (
-              <Text style={[styles.kidName, { color: theme.text, opacity: 0.6 }]}>
-                {session.kidName}
-              </Text>
-            )}
-          </View>
-          
-          <View style={styles.sessionStats}>
-            <Text style={[
-              styles.duration, 
-              { color: isPunishment ? '#F44336' : isBonus ? '#4CAF50' : theme.text }
-            ]}>
-              {isPunishment ? '-' : isBonus ? '+' : ''}{formatTime(session.duration)}
-            </Text>
-            
-            <View style={styles.actionButtons}>
-              <TouchableOpacity
-                style={styles.editButton}
-                onPress={() => handleEditPress(session)}
-              >
-                <Text style={styles.editButtonText}>✏️</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[styles.deleteButton, { backgroundColor: '#ff4444' }]}
-                onPress={() => handleDeletePress(session)}
-              >
-                <Text style={styles.deleteButtonText}>🗑️</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.sessionDetails}>
-          {session.timeStarted && session.timeEnded && (
-            <Text style={[styles.timeRange, { color: theme.text, opacity: 0.7 }]}>
-              {formatTimestamp(session.timeStarted)} - {formatTimestamp(session.timeEnded)}
-            </Text>
-          )}
-          {session.device && (
-            <Text style={[styles.device, { color: theme.text, opacity: 0.7 }]}>
-              Device: {session.device}
-            </Text>
-          )}
-          {(session.reason || session.reasonMessage) && (
-            <Text style={[styles.reason, { color: theme.text, opacity: 0.7 }]}>
-              Reason: {session.reason || session.reasonMessage}
-            </Text>
-          )}
-        </View>
-      </View>
-    );
   };
 
+  const renderSession = (session, index) => (
+    <SessionCard
+      key={session.id || index}
+      session={session}
+      index={index}
+      theme={theme}
+      userType={userType}
+      userName={userName || userId} // Use userName or fallback to userId
+      kidId={session.kidId || userId} // Pass the kid ID for targeting
+      getAppInfo={getAppInfo}
+      handleDeletePress={showDeleteConfirmation} // Pass delete handler
+      onSessionUpdated={handleSessionUpdated} // Pass update callback
+    />
+  );
+  
   const getTotalMinutes = () => {
     return todaysSessions.reduce((total, session) => {
       if (session.countTowardsTotal !== false) {
@@ -440,7 +352,7 @@ const TodaysSessionsModal = ({
             </View>
 
             {/* Summary */}
-            <View style={[
+            {/* <View style={[
               styles.summaryCard,
               { backgroundColor: theme.isDark ? '#333' : 'rgba(255,255,255,0.8)' }
             ]}>
@@ -465,7 +377,7 @@ const TodaysSessionsModal = ({
                   </Text>
                 </View>
               </View>
-            </View>
+            </View> */}
 
             {/* Sessions List */}
             <ScrollView
@@ -619,80 +531,6 @@ const styles = StyleSheet.create({
   sessionsList: {
     flex: 1,
     marginBottom: 20,
-  },
-  sessionCard: {
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.1)',
-  },
-  sessionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-  },
-  sessionInfo: {
-    flex: 1,
-  },
-  sessionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-  appName: {
-    fontSize: 14,
-    marginBottom: 2,
-  },
-  kidName: {
-    fontSize: 12,
-  },
-  sessionStats: {
-    alignItems: 'flex-end',
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 4,
-  },
-  duration: {
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  editButton: {
-    padding: 6,
-    borderRadius: 6,
-    backgroundColor: 'rgba(0, 0, 0, 0.1)',
-    minWidth: 32,
-    alignItems: 'center',
-  },
-  editButtonText: {
-    fontSize: 14,
-  },
-  deleteButton: {
-    padding: 6,
-    borderRadius: 6,
-    minWidth: 32,
-    alignItems: 'center',
-  },
-  deleteButtonText: {
-    fontSize: 14,
-    color: 'white',
-  },
-  sessionDetails: {
-    marginTop: 8,
-  },
-  timeRange: {
-    fontSize: 12,
-    marginBottom: 2,
-  },
-  device: {
-    fontSize: 12,
-    marginBottom: 2,
-  },
-  reason: {
-    fontSize: 12,
   },
   emptyState: {
     alignItems: 'center',

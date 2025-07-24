@@ -15,6 +15,7 @@ import {
 import { useTheme } from '../context/ThemeContext';
 import { useData } from '../context/DataContext';
 import apiService from '../services/apiService';
+import { DateTime } from 'luxon';
 
 const EndSessionModal = ({ visible, onClose, userName, selectedKid, userType }) => {
   const { theme } = useTheme();
@@ -56,9 +57,9 @@ const EndSessionModal = ({ visible, onClose, userName, selectedKid, userType }) 
 
   // Calculate current session duration
   const calculateCurrentDuration = (timeStarted) => {
-    const startTime = new Date(timeStarted);
-    const now = new Date();
-    return Math.round((now - startTime) / (1000 * 60));
+    const startTime = DateTime.fromISO(timeStarted);
+    const now = DateTime.local();
+    return Math.round(now.diff(startTime, 'minutes').minutes);
   };
 
   // Clear form
@@ -101,15 +102,15 @@ const EndSessionModal = ({ visible, onClose, userName, selectedKid, userType }) 
       }
 
       // Calculate duration
-      const startTime = new Date(session.timeStarted);
-      const endTime = new Date();
-      const duration = Math.round((endTime - startTime) / (1000 * 60));
+      const startTime = DateTime.fromISO(session.timeStarted);
+      const endTime = DateTime.local();
+      const duration = Math.round(endTime.diff(startTime, 'minutes').minutes);
 
       // Prepare updates
       const updates = {
-        timeEnded: endTime.toISOString(),
+        timeEnded: endTime.toISO(),
         duration: duration,
-        updatedAt: new Date().toISOString(),
+        updatedAt: DateTime.local().toISO(),
         updatedBy: userName,
         // Remove these fields by not including them in the update
         // The backend should handle removing active and estimatedDuration
@@ -135,7 +136,7 @@ const EndSessionModal = ({ visible, onClose, userName, selectedKid, userType }) 
 
       Alert.alert(
         'Session Ended! ⏹️', 
-        `${appName} session ended on ${session.device}\n\nSession duration: ${duration} minutes\nStarted: ${startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}\nEnded: ${endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+        `${appName} session ended on ${session.device}\n\nSession duration: ${duration} minutes\nStarted: ${startTime.toLocaleString(DateTime.TIME_SIMPLE)}\nEnded: ${endTime.toLocaleString(DateTime.TIME_SIMPLE)}`
       );
       handleClose();
     } catch (error) {
@@ -151,7 +152,7 @@ const EndSessionModal = ({ visible, onClose, userName, selectedKid, userType }) 
     const appName = appInfo?.displayName || session.app;
     const appIcon = appInfo?.icon || '📱';
     
-    const startTime = new Date(session.timeStarted);
+    const startTime = DateTime.fromISO(session.timeStarted);
     const currentDuration = calculateCurrentDuration(session.timeStarted);
     const estimatedText = session.estimatedDuration ? ` (estimated ${session.estimatedDuration}m)` : '';
 
@@ -203,7 +204,7 @@ const EndSessionModal = ({ visible, onClose, userName, selectedKid, userType }) 
               opacity: 0.9
             }
           ]}>
-            Started: {startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            Started: {startTime.toLocaleString(DateTime.TIME_SIMPLE)}
           </Text>
           <Text style={[
             styles.sessionDuration,

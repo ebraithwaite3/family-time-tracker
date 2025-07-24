@@ -17,6 +17,7 @@ import { useData } from '../context/DataContext';
 import CustomDropdown from '../components/CustomDropdown';
 import apiService from '../services/apiService';
 import uuid from 'react-native-uuid';
+import { DateTime } from 'luxon';
 
 const PunishmentModal = ({ visible, onClose, userName, selectedKid }) => {
   const { theme } = useTheme();
@@ -30,8 +31,10 @@ const PunishmentModal = ({ visible, onClose, userName, selectedKid }) => {
 
   // Get today's date
   const getTodayDate = () => {
-    const today = new Date();
-    return today.toISOString().split('T')[0];
+    // DateTime.local() gets the current time in the system's local timezone.
+    // .toISODate() formats it as 'YYYY-MM-DD'.
+    const today = DateTime.local().toISODate();
+    return today;
   };
 
   // Get remaining time for validation
@@ -102,8 +105,8 @@ const PunishmentModal = ({ visible, onClose, userName, selectedKid }) => {
         punishment: true,
         countTowardsTotal: true, // This reduces their available time
         reason: finalReason,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        createdAt: DateTime.local().toISO(),
+        updatedAt: DateTime.local().toISO(),
         updatedBy: userName,
       };
 
